@@ -1,0 +1,457 @@
+---
+const EMAIL = 'itaiarik@gmail.com';
+const YEAR = new Date().getFullYear();
+---
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="description" content="Market Polo — a small property developer. Considered homes, built to last." />
+  <title>Market Polo — a small property developer</title>
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <link rel="alternate icon" href="/favicon.ico" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;1,9..144,400;1,9..144,500&family=Inter:wght@300;400;500&display=swap" rel="stylesheet" />
+  <script src="/track.js" is:inline></script>
+  <style>
+    :root {
+      --bg: #faf7f0;
+      --bg-soft: #f4f0e6;
+      --fg: #1a1a1a;
+      --fg-dim: #5a5a55;
+      --rule: rgba(26, 26, 26, 0.12);
+      --rule-strong: rgba(26, 26, 26, 0.22);
+      --accent: #5b6f4a;
+      --accent-deep: #485a3a;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+    body {
+      background: var(--bg);
+      color: var(--fg);
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      font-weight: 400;
+      font-size: 17px;
+      line-height: 1.55;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+    @media (prefers-reduced-motion: reduce) {
+      html { scroll-behavior: auto; }
+      * { animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; }
+    }
+    a { color: inherit; text-decoration: none; touch-action: manipulation; }
+
+    /* ====== HEADER ====== */
+    header {
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      background: rgba(250, 247, 240, 0.88);
+      backdrop-filter: saturate(180%) blur(12px);
+      -webkit-backdrop-filter: saturate(180%) blur(12px);
+      border-bottom: 1px solid var(--rule);
+      padding-top: env(safe-area-inset-top, 0);
+    }
+    .header-inner {
+      max-width: 1120px;
+      margin: 0 auto;
+      padding: 1.1rem 2rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 2rem;
+    }
+    .wordmark {
+      font-family: 'Fraunces', serif;
+      font-style: italic;
+      font-weight: 400;
+      font-size: 1.4rem;
+      letter-spacing: -0.01em;
+      color: var(--fg);
+    }
+    .nav-link {
+      font-size: 0.92rem;
+      color: var(--fg-dim);
+      padding: 0.5rem 0;
+      transition: color 0.25s ease;
+      min-height: 44px;
+      display: inline-flex;
+      align-items: center;
+    }
+    .nav-link:hover { color: var(--accent-deep); }
+
+    /* ====== SHARED SECTION RHYTHM ====== */
+    section { padding: 6rem 2rem; }
+    .container { max-width: 1120px; margin: 0 auto; }
+    .eyebrow {
+      font-family: 'Inter', sans-serif;
+      font-size: 0.72rem;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--accent-deep);
+      font-weight: 500;
+      margin-bottom: 1.5rem;
+    }
+    .em-accent { color: var(--accent-deep); font-style: italic; }
+
+    /* ====== HERO ====== */
+    .hero {
+      padding: 8rem 2rem 7rem;
+      border-bottom: 1px solid var(--rule);
+    }
+    .hero-title {
+      font-family: 'Fraunces', serif;
+      font-weight: 400;
+      font-size: clamp(2.4rem, 6.5vw, 5.25rem);
+      line-height: 1.04;
+      letter-spacing: -0.025em;
+      max-width: 18ch;
+      color: var(--fg);
+    }
+    .hero-sub {
+      margin-top: 2rem;
+      max-width: 56ch;
+      font-size: 1.08rem;
+      color: var(--fg-dim);
+      line-height: 1.65;
+    }
+    .hero-cta {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      margin-top: 2.5rem;
+      padding: 0.85rem 0;
+      font-size: 0.95rem;
+      color: var(--fg);
+      border-bottom: 1px solid var(--rule-strong);
+      transition: border-color 0.25s ease, color 0.25s ease, gap 0.25s ease;
+      min-height: 44px;
+    }
+    .hero-cta:hover {
+      color: var(--accent-deep);
+      border-color: var(--accent-deep);
+      gap: 0.65rem;
+    }
+
+    /* ====== WHAT WE DO ====== */
+    .about { border-bottom: 1px solid var(--rule); }
+    .about-grid {
+      display: grid;
+      grid-template-columns: 1fr 1.6fr;
+      gap: 5rem;
+      align-items: start;
+    }
+    .about p {
+      font-family: 'Fraunces', serif;
+      font-size: clamp(1.2rem, 1.8vw, 1.55rem);
+      line-height: 1.55;
+      color: var(--fg);
+      max-width: 50ch;
+    }
+    .about p + p { margin-top: 1.5rem; }
+
+    /* ====== APPROACH ====== */
+    .approach { border-bottom: 1px solid var(--rule); background: var(--bg-soft); }
+    .principles {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 1px;
+      background: var(--rule);
+      border: 1px solid var(--rule);
+    }
+    .principle {
+      padding: 2.5rem 2rem;
+      background: var(--bg-soft);
+      display: flex;
+      flex-direction: column;
+      gap: 0.6rem;
+    }
+    .principle-num {
+      font-family: 'Fraunces', serif;
+      font-style: italic;
+      font-size: 0.95rem;
+      color: var(--accent-deep);
+      margin-bottom: 0.5rem;
+    }
+    .principle h3 {
+      font-family: 'Fraunces', serif;
+      font-weight: 400;
+      font-size: 1.5rem;
+      line-height: 1.2;
+      letter-spacing: -0.01em;
+    }
+    .principle p {
+      color: var(--fg-dim);
+      font-size: 0.98rem;
+      line-height: 1.6;
+      max-width: 40ch;
+    }
+
+    /* ====== HOW IT WORKS ====== */
+    .process { border-bottom: 1px solid var(--rule); }
+    .steps {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 3rem;
+      margin-top: 1.5rem;
+    }
+    .step {
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+      padding-top: 1.75rem;
+      border-top: 1px solid var(--rule-strong);
+    }
+    .step-num {
+      font-family: 'Fraunces', serif;
+      font-style: italic;
+      font-size: 1.1rem;
+      color: var(--accent-deep);
+    }
+    .step h3 {
+      font-family: 'Fraunces', serif;
+      font-weight: 400;
+      font-size: 1.4rem;
+      line-height: 1.2;
+      letter-spacing: -0.01em;
+    }
+    .step p {
+      color: var(--fg-dim);
+      font-size: 0.98rem;
+      line-height: 1.6;
+      max-width: 38ch;
+    }
+
+    .section-heading {
+      font-family: 'Fraunces', serif;
+      font-weight: 400;
+      font-size: clamp(2rem, 3.6vw, 3rem);
+      line-height: 1.1;
+      letter-spacing: -0.02em;
+      max-width: 22ch;
+      margin-bottom: 3rem;
+    }
+
+    /* ====== CONTACT ====== */
+    .contact {
+      padding: 8rem 2rem 7rem;
+      border-bottom: 1px solid var(--rule);
+      text-align: center;
+    }
+    .contact-inner { max-width: 720px; margin: 0 auto; }
+    .contact h2 {
+      font-family: 'Fraunces', serif;
+      font-weight: 400;
+      font-size: clamp(2.25rem, 4.5vw, 3.5rem);
+      line-height: 1.1;
+      letter-spacing: -0.02em;
+      margin-bottom: 1.5rem;
+    }
+    .contact p {
+      color: var(--fg-dim);
+      font-size: 1.1rem;
+      line-height: 1.65;
+      margin-bottom: 2.5rem;
+      max-width: 48ch;
+      margin-left: auto;
+      margin-right: auto;
+    }
+    .email-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-family: 'Fraunces', serif;
+      font-size: clamp(1.6rem, 3.5vw, 2.5rem);
+      letter-spacing: -0.015em;
+      color: var(--fg);
+      padding: 0.5rem 0.25rem;
+      min-height: 44px;
+      border-bottom: 1px solid var(--rule-strong);
+      transition: color 0.25s ease, border-color 0.25s ease;
+    }
+    .email-link:hover { color: var(--accent-deep); border-color: var(--accent-deep); }
+
+    /* ====== FOOTER ====== */
+    footer {
+      padding: 2rem 2rem calc(2rem + env(safe-area-inset-bottom, 0px));
+      text-align: center;
+      font-size: 0.85rem;
+      color: var(--fg-dim);
+    }
+    footer a:hover { color: var(--accent-deep); }
+    footer .dot {
+      color: var(--rule-strong);
+      margin: 0 0.6rem;
+    }
+
+    /* ====== REVEAL ON SCROLL (gentle) ====== */
+    .reveal { opacity: 0; transform: translateY(14px); transition: opacity 0.9s ease, transform 0.9s cubic-bezier(0.2, 0.7, 0.2, 1); }
+    .reveal.in { opacity: 1; transform: translateY(0); }
+    @media (prefers-reduced-motion: reduce) {
+      .reveal { opacity: 1; transform: none; }
+    }
+
+    /* ====== RESPONSIVE ====== */
+    @media (max-width: 900px) {
+      section { padding: 4.5rem 1.5rem; }
+      .hero { padding: 5.5rem 1.5rem 4.5rem; }
+      .contact { padding: 5.5rem 1.5rem 4.5rem; }
+      .header-inner { padding: 1rem 1.5rem; }
+      .about-grid { grid-template-columns: 1fr; gap: 2rem; }
+      .steps { grid-template-columns: 1fr; gap: 2rem; }
+      .principles { grid-template-columns: 1fr; }
+      .principle { padding: 2rem 1.5rem; }
+    }
+    @media (max-width: 600px) {
+      .hero-sub { font-size: 1.02rem; }
+      .about p { font-size: 1.15rem; }
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="header-inner">
+      <a href="#top" class="wordmark" aria-label="Market Polo — home">Market <em>Polo</em></a>
+      <a href="#contact" class="nav-link">Get in touch &rarr;</a>
+    </div>
+  </header>
+
+  <main id="top">
+
+    <!-- HERO -->
+    <section class="hero">
+      <div class="container">
+        <h1 class="hero-title reveal">
+          A small developer.<br />
+          <span class="em-accent">Considered</span> homes.<br />
+          Built to last.
+        </h1>
+        <p class="hero-sub reveal">
+          Market Polo is a boutique property developer working on a small number of high-end homes each year — quietly, carefully, and with the people we believe in.
+        </p>
+        <a href="#contact" class="hero-cta reveal">Get in touch <span aria-hidden="true">&rarr;</span></a>
+      </div>
+    </section>
+
+    <!-- WHAT WE DO -->
+    <section class="about">
+      <div class="container about-grid">
+        <div class="eyebrow reveal">— What we do</div>
+        <div>
+          <p class="reveal">
+            We develop a small number of homes each year, in places worth being. We partner with architects, builders and local craftspeople we trust — people who care about how something is made, not just how quickly.
+          </p>
+          <p class="reveal">
+            We keep our schemes small on purpose. Every choice, from the joinery to the front door, gets the attention it deserves.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- APPROACH -->
+    <section class="approach">
+      <div class="container">
+        <div class="eyebrow reveal">— Approach</div>
+        <h2 class="section-heading reveal">Four principles, applied to <span class="em-accent">every home.</span></h2>
+
+        <div class="principles">
+          <div class="principle reveal">
+            <div class="principle-num">01</div>
+            <h3>Fewer homes, better made</h3>
+            <p>Small schemes by design, not by accident. The scale lets us be present at every stage.</p>
+          </div>
+          <div class="principle reveal">
+            <div class="principle-num">02</div>
+            <h3>Architecture first</h3>
+            <p>We partner with practices we believe in, then build the brief around what makes a place feel right to live in.</p>
+          </div>
+          <div class="principle reveal">
+            <div class="principle-num">03</div>
+            <h3>Built to outlast trends</h3>
+            <p>Materials chosen because they age well. Less to maintain, more to enjoy — twenty years from now and beyond.</p>
+          </div>
+          <div class="principle reveal">
+            <div class="principle-num">04</div>
+            <h3>Quiet by design</h3>
+            <p>Homes meant for living, not for show reels. Calm rooms, considered light, useful storage.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- HOW IT WORKS -->
+    <section class="process">
+      <div class="container">
+        <div class="eyebrow reveal">— How it works</div>
+        <h2 class="section-heading reveal">A measured way to <span class="em-accent">find a home.</span></h2>
+
+        <div class="steps">
+          <div class="step reveal">
+            <div class="step-num">01</div>
+            <h3>A conversation</h3>
+            <p>Tell us about you and what you're looking for. We'll be honest about what we have and when.</p>
+          </div>
+          <div class="step reveal">
+            <div class="step-num">02</div>
+            <h3>A viewing</h3>
+            <p>When something genuinely fits, we'll arrange a visit. Not before.</p>
+          </div>
+          <div class="step reveal">
+            <div class="step-num">03</div>
+            <h3>A measured purchase</h3>
+            <p>No pressure, no sales theatre. Plenty of time, and direct access to the people who built it.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- CONTACT -->
+    <section class="contact" id="contact">
+      <div class="contact-inner">
+        <div class="eyebrow reveal">— Get in touch</div>
+        <h2 class="reveal">The best way to start is an email.</h2>
+        <p class="reveal">
+          We read every one. Tell us a little about you, your timeframe, where you'd like to be. We'll write back personally.
+        </p>
+        <a class="email-link reveal" href={`mailto:${EMAIL}`}>{EMAIL}</a>
+      </div>
+    </section>
+
+  </main>
+
+  <footer>
+    <div>
+      © {YEAR} Market Polo
+      <span class="dot">·</span>
+      <a href={`mailto:${EMAIL}`}>{EMAIL}</a>
+    </div>
+  </footer>
+
+  <script is:inline>
+    // Gentle scroll-reveal — IntersectionObserver, respects prefers-reduced-motion.
+    (function () {
+      const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      if (reduce) {
+        document.querySelectorAll('.reveal').forEach(function (el) { el.classList.add('in'); });
+        return;
+      }
+      var els = document.querySelectorAll('.reveal');
+      var io = new IntersectionObserver(function (entries) {
+        entries.forEach(function (entry) {
+          if (entry.isIntersecting) {
+            entry.target.classList.add('in');
+            io.unobserve(entry.target);
+          }
+        });
+      }, { rootMargin: '0px 0px -10% 0px', threshold: 0.05 });
+      els.forEach(function (el) { io.observe(el); });
+    })();
+  </script>
+
+</body>
+</html>
