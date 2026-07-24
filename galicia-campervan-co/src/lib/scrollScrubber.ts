@@ -1,37 +1,32 @@
-export interface SequenceConfig {
-  /** e.g. "/sequences/hire/" */
-  basePath: string;
-  frameCount: number;
-  /** filename padding, e.g. 4 -> 0001.jpg */
-  pad: number;
-  ext: string;
-}
+import { buildTimeline, type ModeTimeline, type BuiltTimeline, type SectionRange } from './heroTimeline';
 
 export interface ScrollScrubberOptions {
   canvas: HTMLCanvasElement;
   /** the tall scroll-distance element the canvas is pinned inside */
   track: HTMLElement;
-  sequences: Record<string, SequenceConfig>;
+  timelines: Record<string, ModeTimeline>;
   initialMode: string;
-  onProgress?: (progress: number, mode: string) => void;
+  onProgress?: (progress: number, mode: string, sectionRanges: SectionRange[]) => void;
 }
 
-function frameSrc(seq: SequenceConfig, index: number): string {
-  const n = String(index + 1).padStart(seq.pad, '0');
-  return `${seq.basePath}${n}.${seq.ext}`;
+function frameSrc(tl: ModeTimeline, index: number): string {
+  const n = String(index + 1).padStart(tl.pad, '0');
+  return `${tl.basePath}${n}.${tl.ext}`;
 }
 
 /**
- * Drives a <canvas> from scroll position: as the user scrolls through
- * `track`, the canvas draws the frame matching scroll progress (0-1),
- * so the video never visibly "plays" on its own — only scroll moves it.
+ * Drives a <canvas> from scroll position: as the user scrolls through `track`,
+ * the canvas draws the frame the timeline maps that scroll progress to — so the
+ * video never plays on its own; only scroll moves it, pausing on "hold" frames.
  */
 export function createScrollScrubber(opts: ScrollScrubberOptions) {
-  const { canvas, track, sequences } = opts;
+  const { canvas, track } = opts;
   const ctx = canvas.getContext('2d', { alpha: false });
   if (!ctx) throw new Error('2D canvas context unavailable');
 
   let mode = opts.initialMode;
+  let tl: ModeTimeline = opts.timelines[mode];
+  let built: BuiltTimeline = buildTimeline(tl);
   let images: HTMLImageElement[] = [];
   let loaded: boolean[] = [];
   let currentFrame = -1;
@@ -49,30 +44,45 @@ export function createScrollScrubber(opts: ScrollScrubberOptions) {
   }
 
   function loadSequence(nextMode: string) {
-    const seq = sequences[nextMode];
-    if (!seq) throw new Error(`Unknown sequence mode: ${nextMode}`);
+    tl = opts.timelines[nextMode];
+    if (!tl) throw new Error(`Unknown sequence mode: ${nextMode}`);
     mode = nextMode;
-    images = new Array(seq.frameCount);
-    loaded = new Array(seq.frameCount).fill(false);
-    for (let i = 0; i < seq.frameCount; i++) {
+    built = buildTimeline(tl);
+    images = new Array(tl.frameCount);
+    loaded = new Array(tl.frameCount).fill(false);
+    for (let i = 0; i < tl.frameCount; i++) {
       const img = new Image();
       img.decoding = 'async';
       img.onload = () => {
         loaded[i] = true;
         if (i === desiredFrame) drawFrame(i, true);
       };
-      img.src = frameSrc(seq, i);
+      img.src = frameSrc(tl, i);
       images[i] = img;
     }
     currentFrame = -1;
   }
 
+  function nearestLoaded(index: number): number {
+    if (loaded[index]) return index;
+    // search outward so we draw the closest available frame, never a black flash
+    for (let d = 1; d < images.length; d++) {
+      if (index - d >= 0 && loaded[index - d]) return index - d;
+      if (index + d < images.length && loaded[index + d]) return index + d;
+    }
+    return -1;
+  }
+
   function drawFrame(index: number, force = false) {
     desiredFrame = index;
     if (!force && index === currentFrame) return;
-    const img = images[index];
-    if (!img || !loaded[index]) return; // onload redraws when this frame arrives
-    currentFrame = index;
+    const drawIdx = nearestLoaded(index);
+    if (drawIdx === -1) return; // nothing loaded yet; onload will redraw
+    const img = images[drawIdx];
+    if (!img) return;
+    // Track what we actually drew. If it's a fallback (≠ desired), the exact
+    // frame's onload (i === desiredFrame) will redraw it the moment it arrives.
+    currentFrame = drawIdx;
 
     const cw = canvas.width;
     const ch = canvas.height;
@@ -90,12 +100,6 @@ export function createScrollScrubber(opts: ScrollScrubberOptions) {
     ctx.drawImage(img, dx, dy, dw, dh);
   }
 
-  function frameForProgress(p: number): number {
-    const seq = sequences[mode];
-    const idx = Math.round(p * (seq.frameCount - 1));
-    return Math.max(0, Math.min(seq.frameCount - 1, idx));
-  }
-
   let ticking = false;
   function onScroll() {
     if (ticking) return;
@@ -108,8 +112,8 @@ export function createScrollScrubber(opts: ScrollScrubberOptions) {
       progress = scrollableDistance > 0
         ? Math.max(0, Math.min(1, scrolled / scrollableDistance))
         : 0;
-      drawFrame(frameForProgress(progress));
-      opts.onProgress?.(progress, mode);
+      drawFrame(built.frameAt(progress));
+      opts.onProgress?.(progress, mode, built.sectionRanges);
     });
   }
 
@@ -124,8 +128,8 @@ export function createScrollScrubber(opts: ScrollScrubberOptions) {
     setMode(nextMode: string) {
       if (nextMode === mode) return;
       loadSequence(nextMode);
-      drawFrame(frameForProgress(progress), true);
-      opts.onProgress?.(progress, mode);
+      drawFrame(built.frameAt(progress), true);
+      opts.onProgress?.(progress, mode, built.sectionRanges);
     },
     getProgress: () => progress,
     getMode: () => mode,

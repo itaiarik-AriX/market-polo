@@ -1,22 +1,62 @@
 ---
-// Placeholder copy below — swap for real copy/specs once you've settled on
-// brand voice and actual van details. Ranges are fractions (0-1) of the
-// total scroll-through distance for that mode's sequence.
+// Copy is keyed by section id (see src/lib/heroTimeline.ts). Each block fades in
+// while the video holds on that section's frame. Wording is a first draft — easy
+// to refine. The van's real details go in the Hire "van-bed" / "kitchen" blocks.
 const copy = {
-  hire: [
-    { range: [0, 0.2], eyebrow: 'The vision', title: 'The dream starts at the edge of the world.', body: 'One campervan. An empty coastline. Nowhere you need to be.' },
-    { range: [0.2, 0.42], eyebrow: 'The van', title: 'A classic, fully restored.', body: 'Mechanically sound, road-ready, and built to go the distance.' },
-    { range: [0.42, 0.68], eyebrow: 'The kitchen', title: 'A kitchen built for real cooking.', body: 'Everything you need for the road, nothing you don’t.' },
-    { range: [0.68, 0.9], eyebrow: 'The bed', title: 'Somewhere to land, wherever the day ends.', body: 'Comfortable, proper rest — not a compromise.' },
-    { range: [0.9, 1], eyebrow: 'Ready?', title: 'Ready when you are.', body: 'Tell us your dates below.' },
-  ],
-  build: [
-    { range: [0, 0.2], eyebrow: 'The vision', title: 'Every campervan starts as steel and imagination.', body: 'This is where your build begins.' },
-    { range: [0.2, 0.42], eyebrow: 'Engineering', title: 'Engineered underneath.', body: 'Insulation, electrics, and systems done properly — so nothing lets you down.' },
-    { range: [0.42, 0.68], eyebrow: 'Craftsmanship', title: 'Bespoke joinery, built by hand.', body: 'Every cabinet fitted to your van, not a generic kit.' },
-    { range: [0.68, 0.9], eyebrow: 'The finish', title: 'Finished to live in, not just to look at.', body: 'A complete build, ready for the road.' },
-    { range: [0.9, 1], eyebrow: 'Ready?', title: 'Ready to build yours?', body: 'Tell us what you have in mind below.' },
-  ],
+  hire: {
+    welcome: {
+      eyebrow: 'Galicia Campervan Co',
+      title: 'Wake up somewhere the map forgot.',
+      body: 'A classic camper, the open coast, and nowhere you have to be.',
+    },
+    'van-bed': {
+      eyebrow: 'The van & the bed',
+      title: 'A classic VW, a proper bed.',
+      body: 'Restored, road-ready, and made for real rest at the end of the day.',
+    },
+    kitchen: {
+      eyebrow: 'The kitchen',
+      title: 'Everything you need to cook on the road.',
+      body: 'A full little galley — so dinner with a view is always on the menu.',
+    },
+    dream: {
+      eyebrow: 'The dream',
+      title: 'Chase the sunset. Park at the edge of it.',
+      body: 'Slow mornings, salt air, and a home that moves with you.',
+    },
+    closing: {
+      eyebrow: 'Ready?',
+      title: 'Ready to hit the road?',
+      body: 'Tell us your dates below — we’ll write back personally.',
+    },
+  },
+  build: {
+    welcome: {
+      eyebrow: 'Galicia Campervan Co',
+      title: 'Every camper starts as steel and imagination.',
+      body: 'This is where your build begins.',
+    },
+    engineering: {
+      eyebrow: 'Engineering',
+      title: 'Engineered underneath.',
+      body: 'Insulation, electrics and systems done properly — so nothing lets you down.',
+    },
+    joinery: {
+      eyebrow: 'Craftsmanship',
+      title: 'Bespoke joinery, built by hand.',
+      body: 'Every cabinet fitted to your van, not a generic kit.',
+    },
+    finish: {
+      eyebrow: 'The finish',
+      title: 'Finished to live in, not just to look at.',
+      body: 'A complete build, ready for the road.',
+    },
+    closing: {
+      eyebrow: 'Ready?',
+      title: 'Ready to build yours?',
+      body: 'Tell us what you have in mind below.',
+    },
+  },
 };
 ---
 <section class="hero-track" id="top" data-hero-track>
@@ -25,14 +65,9 @@ const copy = {
     <div class="hero-vignette" aria-hidden="true"></div>
 
     <div class="hero-copy">
-      {Object.entries(copy).map(([mode, blocks]) => (
-        blocks.map((block, i) => (
-          <div
-            class="copy-block"
-            data-copy-mode={mode}
-            data-range={block.range.join(',')}
-            data-index={i}
-          >
+      {Object.entries(copy).map(([mode, sections]) => (
+        Object.entries(sections).map(([id, block]) => (
+          <div class="copy-block" data-copy-mode={mode} data-copy-id={id}>
             <p class="eyebrow">{block.eyebrow}</p>
             <h2 class="serif copy-title">{block.title}</h2>
             <p class="copy-body">{block.body}</p>
@@ -51,7 +86,7 @@ const copy = {
 <style>
   .hero-track {
     position: relative;
-    height: 500vh; /* total scroll distance mapped to the sequence's frame range */
+    height: 900vh; /* total scroll distance; more = slower, more cinematic scrub */
   }
   .hero-stage {
     position: sticky;
@@ -68,15 +103,13 @@ const copy = {
   .hero-vignette {
     position: absolute;
     inset: 0;
-    background: linear-gradient(180deg, rgba(0, 0, 0, 0.45) 0%, rgba(0, 0, 0, 0) 30%, rgba(0, 0, 0, 0) 60%, rgba(0, 0, 0, 0.55) 100%);
+    background: linear-gradient(180deg, rgba(0, 0, 0, 0.42) 0%, rgba(0, 0, 0, 0) 26%, rgba(0, 0, 0, 0) 58%, rgba(0, 0, 0, 0.62) 100%);
     pointer-events: none;
   }
 
   .hero-copy {
     position: absolute;
     inset: 0;
-    display: flex;
-    align-items: flex-end;
     pointer-events: none;
   }
   .copy-block {
@@ -85,30 +118,31 @@ const copy = {
     right: 0;
     bottom: 12vh;
     padding: 0 2rem;
-    max-width: 720px;
+    max-width: 760px;
     margin: 0 auto;
     text-align: center;
     opacity: 0;
-    transform: translateY(16px);
-    transition: opacity 0.25s linear, transform 0.25s ease;
+    transform: translateY(18px);
+    will-change: opacity, transform;
   }
   .copy-block .eyebrow {
-    margin-bottom: 0.85rem;
-    text-shadow: 0 1px 12px rgba(0, 0, 0, 0.6);
+    margin-bottom: 0.9rem;
+    text-shadow: 0 1px 12px rgba(0, 0, 0, 0.7);
   }
   .copy-title {
     font-weight: 400;
-    font-size: clamp(1.9rem, 4.6vw, 3.4rem);
-    line-height: 1.08;
+    font-size: clamp(2rem, 5vw, 3.6rem);
+    line-height: 1.06;
     letter-spacing: -0.02em;
     color: var(--fg);
-    text-shadow: 0 2px 24px rgba(0, 0, 0, 0.55);
+    text-shadow: 0 2px 28px rgba(0, 0, 0, 0.6);
   }
   .copy-body {
     margin-top: 1rem;
-    font-size: 1.05rem;
-    color: var(--fg-dim);
-    text-shadow: 0 1px 16px rgba(0, 0, 0, 0.6);
+    font-size: clamp(1rem, 1.6vw, 1.15rem);
+    color: var(--fg);
+    opacity: 0.92;
+    text-shadow: 0 1px 18px rgba(0, 0, 0, 0.7);
   }
 
   .scroll-cue {
@@ -139,56 +173,53 @@ const copy = {
   }
 
   @media (max-width: 640px) {
-    .hero-track {
-      height: 420vh;
-    }
-    .copy-block {
-      bottom: 14vh;
-    }
+    .copy-block { bottom: 14vh; }
   }
 </style>
 
 <script>
   import { createScrollScrubber } from '../lib/scrollScrubber';
+  import { timelines } from '../lib/heroTimeline';
+  import type { SectionRange } from '../lib/heroTimeline';
 
   function initHero() {
     const canvas = document.querySelector<HTMLCanvasElement>('[data-hero-canvas]');
     const track = document.querySelector<HTMLElement>('[data-hero-track]');
     const scrollCue = document.querySelector<HTMLElement>('[data-scroll-cue]');
-    const copyBlocks = Array.from(document.querySelectorAll<HTMLElement>('.copy-block'));
+    const blocks = Array.from(document.querySelectorAll<HTMLElement>('.copy-block'));
     if (!canvas || !track) return;
 
-    const FADE_MARGIN = 0.03;
+    // Fade a section's copy in over the first slice of its hold and out over the last.
+    const EDGE = 0.28; // fraction of each hold used for the fade in/out
 
-    function opacityFor(progress: number, start: number, end: number) {
-      if (progress < start - FADE_MARGIN || progress > end + FADE_MARGIN) return 0;
-      if (progress < start) return (progress - (start - FADE_MARGIN)) / FADE_MARGIN;
-      if (progress > end) return 1 - (progress - end) / FADE_MARGIN;
+    function opacityForRange(p: number, start: number, end: number): number {
+      if (p < start || p > end) return 0;
+      const span = end - start;
+      const edge = span * EDGE;
+      if (p < start + edge) return (p - start) / edge;
+      if (p > end - edge) return (end - p) / edge;
       return 1;
     }
 
     const scrubber = createScrollScrubber({
       canvas,
       track,
+      timelines,
       initialMode: 'hire',
-      sequences: {
-        hire: { basePath: '/sequences/hire/', frameCount: 60, pad: 4, ext: 'svg' },
-        build: { basePath: '/sequences/build/', frameCount: 60, pad: 4, ext: 'svg' },
-      },
-      onProgress(progress, mode) {
-        if (scrollCue) scrollCue.style.opacity = progress > 0.03 ? '0' : '1';
-        for (const block of copyBlocks) {
-          const blockMode = block.dataset.copyMode;
-          if (blockMode !== mode) {
+      onProgress(progress, mode, ranges: SectionRange[]) {
+        if (scrollCue) scrollCue.style.opacity = progress > 0.02 ? '0' : '1';
+        const rangeById: Record<string, SectionRange> = {};
+        for (const r of ranges) rangeById[r.id] = r;
+
+        for (const block of blocks) {
+          if (block.dataset.copyMode !== mode) {
             block.style.opacity = '0';
-            block.style.pointerEvents = 'none';
             continue;
           }
-          const [start, end] = block.dataset.range!.split(',').map(Number);
-          const o = opacityFor(progress, start, end);
+          const r = rangeById[block.dataset.copyId!];
+          const o = r ? opacityForRange(progress, r.start, r.end) : 0;
           block.style.opacity = String(o);
-          block.style.transform = `translateY(${(1 - o) * 16}px)`;
-          block.style.pointerEvents = o > 0.5 ? 'auto' : 'none';
+          block.style.transform = `translateY(${(1 - o) * 18}px)`;
         }
       },
     });
