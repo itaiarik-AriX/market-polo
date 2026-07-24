@@ -37,6 +37,7 @@ export const timelines: Record<string, ModeTimeline> = {
       { id: 'welcome', frame: 0 },
       { id: 'exterior', frame: 81 },
       { id: 'amenities', frame: 227 },
+      { id: 'view', frame: 362 },
       { id: 'closing', frame: 456 },
     ],
   },
