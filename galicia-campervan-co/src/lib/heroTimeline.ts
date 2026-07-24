@@ -25,6 +25,10 @@ export interface ModeTimeline {
   basePath: string;
   /** optional lighter frames for small screens; falls back to basePath if absent */
   basePathSmall?: string;
+  /** optional folder of high-res per-station stills, named <section id>.<ext> */
+  stationsBase?: string;
+  /** file extension for station stills (defaults to ext) */
+  stationsExt?: string;
   frameCount: number;
   pad: number;
   ext: string;
@@ -35,6 +39,8 @@ export const timelines: Record<string, ModeTimeline> = {
   hire: {
     basePath: '/sequences/hire/',
     basePathSmall: '/sequences/hire-sm/',
+    stationsBase: '/sequences/hire-stations/',
+    stationsExt: 'webp',
     frameCount: 457,
     pad: 4,
     ext: 'webp',
