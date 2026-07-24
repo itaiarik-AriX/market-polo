@@ -1,0 +1,57 @@
+---
+import '../styles/global.css';
+import Header from '../components/Header.astro';
+import Hero from '../components/Hero.astro';
+import Enquire from '../components/Enquire.astro';
+
+const YEAR = new Date().getFullYear();
+const EMAIL = 'itaiarik@gmail.com';
+---
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="description" content="Galicia Campervan Co — classic campervans, built, renovated, and ready to hire on the Galician coast." />
+  <title>Galicia Campervan Co — hire the dream, or build your own</title>
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;1,9..144,400;1,9..144,500&family=Inter:wght@300;400;500&display=swap" rel="stylesheet" />
+</head>
+<body>
+  <Header />
+  <main>
+    <Hero />
+    <Enquire />
+  </main>
+  <footer>
+    <div>
+      © {YEAR} Galicia Campervan Co
+      <span class="dot">·</span>
+      <a href={`mailto:${EMAIL}`}>{EMAIL}</a>
+    </div>
+  </footer>
+
+  <style>
+    footer {
+      position: relative;
+      z-index: 10;
+      background: var(--bg);
+      border-top: 1px solid var(--rule);
+      padding: 2rem 2rem calc(2rem + env(safe-area-inset-bottom, 0px));
+      text-align: center;
+      font-size: 0.85rem;
+      color: var(--fg-dim);
+    }
+    footer a:hover {
+      color: var(--accent);
+    }
+    footer .dot {
+      color: var(--rule-strong);
+      margin: 0 0.6rem;
+    }
+  </style>
+</body>
+</html>
