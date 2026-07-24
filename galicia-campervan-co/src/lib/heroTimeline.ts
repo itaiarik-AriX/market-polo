@@ -21,7 +21,10 @@ export interface Section {
 }
 
 export interface ModeTimeline {
+  /** full-resolution frames (desktop / large screens) */
   basePath: string;
+  /** optional lighter frames for small screens; falls back to basePath if absent */
+  basePathSmall?: string;
   frameCount: number;
   pad: number;
   ext: string;
@@ -31,6 +34,7 @@ export interface ModeTimeline {
 export const timelines: Record<string, ModeTimeline> = {
   hire: {
     basePath: '/sequences/hire/',
+    basePathSmall: '/sequences/hire-sm/',
     frameCount: 457,
     pad: 4,
     ext: 'webp',

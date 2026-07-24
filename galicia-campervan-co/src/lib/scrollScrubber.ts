@@ -9,9 +9,17 @@ export interface ScrollScrubberOptions {
   onProgress?: (progress: number, mode: string, sectionRanges: SectionRange[]) => void;
 }
 
+// Small screens load the lighter frame set (if the mode provides one), so phones
+// stay fast while big screens get the full-resolution sequence. Decided once at
+// load — a viewport that starts small keeps the light set even if later resized.
+const useSmallTier =
+  typeof window !== 'undefined' &&
+  window.matchMedia('(max-width: 820px)').matches;
+
 function frameSrc(tl: ModeTimeline, index: number): string {
   const n = String(index + 1).padStart(tl.pad, '0');
-  return `${tl.basePath}${n}.${tl.ext}`;
+  const base = useSmallTier && tl.basePathSmall ? tl.basePathSmall : tl.basePath;
+  return `${base}${n}.${tl.ext}`;
 }
 
 /**
