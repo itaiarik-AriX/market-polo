@@ -1,9 +1,9 @@
 # Galicia Campervan Co
 
-A cinematic, dual-mode one-pager: **Hire** a campervan or have one **Built** — with a
-full-screen "video" that scrubs frame-by-frame as you scroll, instead of the page
-moving. A pill toggle in the header switches between the two stories; both share the
-same scroll position, layout, and visual language.
+A cinematic, dual-mode one-pager: **Hire** a campervan or have one **Built** — a
+full-screen video that steps between fixed "stations" as you scroll, instead of the
+page moving. A pill toggle in the header switches between the two stories; both
+share the same station index, layout, and visual language.
 
 > "Galicia Campervan Co" is a working name — swap it in `src/components/Header.astro`
 > and `src/pages/index.astro` when the real brand lands.
@@ -17,35 +17,64 @@ same scroll position, layout, and visual language.
 | `npm run build`   | Production build to `./dist/`                |
 | `npm run preview` | Preview the production build locally         |
 
-## How the scroll-video works
+## How the scroll works — discrete stations, not continuous scrubbing
 
-- `src/lib/scrollScrubber.ts` maps scroll progress through a tall track (500vh) to a
-  frame index, and draws that frame on a pinned full-screen `<canvas>`.
-- Frames live in `public/sequences/hire/` and `public/sequences/build/` as numbered
-  files (`0001.ext`, `0002.ext`, …).
-- Copy blocks in `src/components/Hero.astro` fade in/out at scroll ranges (0–1) you
-  set per block in the `copy` object at the top of that file.
+Each mode has a small number of fixed "stations" (see `sections` in
+`src/lib/heroTimeline.ts`, keyed by a timestamp in seconds). At rest, the site shows
+a sharp still image for the current station. Scrolling, swiping, or pressing an
+arrow key steps exactly one station forward or back:
 
-## Replacing the placeholder frames with real footage
+- **Forward** plays the real `<video>` natively from the current timestamp to the
+  next station's timestamp (sped up via `playbackRate` — see `PLAYBACK_RATE` in
+  `src/lib/heroStepper.ts` — since stations can be many real seconds apart in the
+  source footage).
+- **Backward** manually scrubs `currentTime`, since browsers don't support reverse
+  `<video>` playback.
+- A single gesture always advances exactly one station — it can never rest
+  mid-video. Past the last station, control releases to the page below (the
+  enquiry form); scrolling back up resumes on the station last seen.
 
-The current frames are generated placeholders (see
-`scripts/generate-placeholder-frames.mjs`). When the real videos are ready:
+This replaced an earlier image-sequence approach (hundreds of individual frame
+files) — that model made "video not playing" a real risk, since a transition could
+land on frames that hadn't finished downloading yet. A single video file streams
+progressively and plays natively, which is both smaller and more reliable.
 
-1. Extract frames with ffmpeg (about 8–12 frames per second of footage is plenty):
+## Assets
 
-   ```bash
-   ffmpeg -i hire.mp4 -vf "fps=10,scale=1920:-2" -q:v 3 public/sequences/hire/%04d.jpg
-   ffmpeg -i build.mp4 -vf "fps=10,scale=1920:-2" -q:v 3 public/sequences/build/%04d.jpg
-   ```
+- `public/video/<mode>.mp4` + `public/video/<mode>.webm` — the scrub video for each
+  mode, in both formats (the browser picks whichever it supports; WebM/VP9 is
+  usually smaller at equal quality). Only seen briefly during motion, so it doesn't
+  need to match the stills' sharpness — favor a smaller file over maximum quality
+  here.
+- `public/sequences/<mode>-stations/<id>.webp` — a full-resolution still per
+  station, shown at rest. This is where sharpness actually matters, since it's what
+  people look at when they pause to read. Swap these freely; filenames must match
+  the `id`s in `heroTimeline.ts`.
 
-2. Delete the old `.svg` placeholders from those folders.
-3. In `src/components/Hero.astro`, update the `sequences` config (bottom `<script>`):
-   set `frameCount` to how many frames you extracted and `ext` to `jpg` (or `webp`).
-4. `npm run build` and redeploy.
+### Re-encoding the scrub video
 
-Tip: keep total sequence weight in check — target roughly 3–6 MB per mode. WebP at
-quality ~70 usually beats JPEG. Delete `scripts/generate-placeholder-frames.mjs`
-once real frames are in.
+```bash
+ffmpeg -i source.mp4 -vf "scale=1920:-2" -c:v libvpx-vp9 -crf 32 -b:v 0 \
+  -deadline good -cpu-used 4 -row-mt 1 -pix_fmt yuv420p -an public/video/hire.webm
+ffmpeg -i source.mp4 -vf "scale=1920:-2" -c:v libx264 -preset slow -crf 22 \
+  -pix_fmt yuv420p -movflags +faststart -an public/video/hire.mp4
+```
+
+Keep resolution modest (1920px has been plenty) — this file is only visible while
+actively moving, and full station stills carry the sharpness burden instead. Update
+each station's `time` in `heroTimeline.ts` (seconds into the video) to match new
+footage.
+
+### Re-generating a station still
+
+```bash
+ffmpeg -i source.mp4 -vf "select='eq(n,FRAME)',scale=3840:-2,unsharp=5:5:0.8:5:5:0.4" \
+  -frames:v 1 -c:v libwebp -quality 92 public/sequences/hire-stations/<id>.webp
+```
+
+Pick `FRAME` by scanning candidates and preferring the sharpest (motion blur varies
+frame-to-frame even in a slow pan) — a quick Laplacian-variance script over a
+handful of nearby candidates is more reliable than eyeballing thumbnails.
 
 ## Enquiries
 
@@ -55,4 +84,5 @@ there (and in `src/pages/index.astro` for the footer) to update it.
 
 ## Deploying
 
-See [DEPLOY.md](./DEPLOY.md) — drag-and-drop to Cloudflare Pages, free hosting.
+See [DEPLOY.md](./DEPLOY.md) — this project auto-deploys via Cloudflare Pages' Git
+integration; pushing to the tracked branch is enough.

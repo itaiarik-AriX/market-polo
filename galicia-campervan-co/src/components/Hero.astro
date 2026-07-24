@@ -7,7 +7,7 @@ const stationStills = Object.entries(timelines).flatMap(([mode, tl]) =>
     ? tl.sections.map((s) => ({
         mode,
         id: s.id,
-        src: `${tl.stationsBase}${s.id}.${tl.stationsExt ?? tl.ext}`,
+        src: `${tl.stationsBase}${s.id}.${tl.stationsExt ?? 'webp'}`,
       }))
     : []
 );

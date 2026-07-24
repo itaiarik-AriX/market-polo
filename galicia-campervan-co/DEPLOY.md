@@ -1,43 +1,25 @@
 # Deploy — Galicia Campervan Co
 
-This site is ready to push live to Cloudflare Pages (free, fast, global CDN) — the
-same flow as the other sites.
+This project is already connected to Cloudflare Pages via Git — **every push to the
+tracked branch auto-deploys.** No manual upload step needed.
 
-## One-time setup (5 min)
+## Current setup
 
-1. Sign in at [dash.cloudflare.com](https://dash.cloudflare.com).
-2. Sidebar → **Workers & Pages**.
+- Live URL: `https://galicia-f2z.pages.dev` (custom domain can be added any time —
+  see below).
+- Build command: `npm run build`, output directory: `dist`, root directory:
+  `galicia-campervan-co` (this project lives in a subfolder of the repo).
+- Cloudflare rebuilds automatically within a couple of minutes of any push. Hard
+  refresh (Cmd/Ctrl+Shift+R) to bypass any cached old version.
 
-## Each deploy (1 min)
+## If you ever need to reconnect Git (new project/account)
 
-### 1. Build the production version
-
-```bash
-cd galicia-campervan-co
-npm run build
-```
-
-This creates `dist/` — the final static files.
-
-### 2. Push to Cloudflare Pages
-
-**First deploy (drag & drop):**
-
-1. Cloudflare → **Workers & Pages** → **Create Application** → **Pages** tab → **Upload assets**
-2. Project name: `galicia-campervan-co` (becomes part of the URL)
-3. Drag the `dist/` folder into the upload zone
-4. Click **Deploy site**
-5. ~30 seconds later: live at `https://galicia-campervan-co.pages.dev`
-
-**Re-deploys:** Same flow — drag the new `dist/` into the same project.
-
-**Better long-term: Git connect**
-
-1. Push the folder to GitHub
-2. Cloudflare Pages → Connect to Git → pick the repo
-3. Build command: `npm run build`
-4. Build output: `dist`
-5. Every git push auto-deploys
+1. [dash.cloudflare.com](https://dash.cloudflare.com) → **Workers & Pages** →
+   **Create** → **Pages** tab → **Import an existing Git repository**.
+2. Pick the repo, set **Production branch** to the branch this project tracks.
+3. Build settings: framework preset **Astro**, build command `npm run build`,
+   output directory `dist`, root directory `galicia-campervan-co`.
+4. Save and deploy.
 
 ## Custom domain (when ready)
 
@@ -49,9 +31,7 @@ This creates `dist/` — the final static files.
 
 ## Notes
 
-- Everything in `public/` ships with the build, including the frame sequences —
-  once real footage is in, keep sequences compressed (see README) so first load
-  stays fast.
-- Current frames are placeholders; the site is safe to deploy as a preview but
-  swap in real sequences before showing customers.
+- Everything in `public/` ships with the build, including the scrub videos and
+  station stills — see the README's "Assets" section for what each is and how to
+  update them.
 - Cost: £0 hosting + ~£10/yr domain.
