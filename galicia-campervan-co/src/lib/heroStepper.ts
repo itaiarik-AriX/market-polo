@@ -10,6 +10,10 @@ export interface HeroStepperOptions {
   /** called the instant a station-to-station move begins, so overlays (the sharp
    *  still + copy) can fade out and reveal the playing video underneath */
   onTransitionStart?: (mode: string) => void;
+  /** called when a move has to wait for the target's video data to actually
+   *  finish downloading before it can start (waiting=true), and again once
+   *  it's ready to proceed (waiting=false) — see waitForBuffer() below. */
+  onBufferWait?: (mode: string, waiting: boolean) => void;
 }
 
 const SETTLE_MS = 260; // keep drawing the correct frame under the still's 0.22s crossfade,
@@ -118,6 +122,46 @@ export function createHeroStepper(opts: HeroStepperOptions) {
     return tl.sections[stationIndex].id;
   }
 
+  function bufferedEnd(): number {
+    const b = video.buffered;
+    return b.length ? b.end(b.length - 1) : 0;
+  }
+
+  // Shows the loading cue only if a seek is ACTUALLY taking a while — driven
+  // by `video.seeking` itself, not a separate pre-check. Setting `currentTime`
+  // is what makes the browser fetch whatever byte range it needs; a passive
+  // "wait until video.buffered already covers the target, THEN seek" approach
+  // (tried first, reverted) can hang forever, since nothing requests the data
+  // until a real seek is issued — `buffered` only grows in response to an
+  // actual seek/play, not on its own. So: always seek immediately (as before);
+  // only surface a "loading" indicator if that seek is still unresolved past
+  // a short grace period, and hide it the moment it resolves.
+  function watchForSlowSeek() {
+    let shown = false;
+    let seekingSince: number | null = null;
+    function tick() {
+      if (!busy) {
+        if (shown) opts.onBufferWait?.(mode, false);
+        return;
+      }
+      if (video.seeking) {
+        if (seekingSince === null) seekingSince = performance.now();
+        if (!shown && performance.now() - seekingSince > 400) {
+          opts.onBufferWait?.(mode, true);
+          shown = true;
+        }
+      } else {
+        seekingSince = null;
+        if (shown) {
+          opts.onBufferWait?.(mode, false);
+          shown = false;
+        }
+      }
+      requestAnimationFrame(tick);
+    }
+    requestAnimationFrame(tick);
+  }
+
   // Clears `busy` once BOTH a minimum cooldown has elapsed AND the video has no
   // seek in flight — never on a fixed timer alone. Under a real (non-instant)
   // network, a corrective seek can easily take longer than SETTLE_MS; clearing
@@ -209,6 +253,7 @@ export function createHeroStepper(opts: HeroStepperOptions) {
     activeTo = toTime;
     opts.onTransitionStart?.(mode);
     startDrawLoop();
+    watchForSlowSeek();
     video.pause();
 
     const t0 = performance.now();
@@ -257,6 +302,7 @@ export function createHeroStepper(opts: HeroStepperOptions) {
         videoCurrentTime: video.currentTime,
         videoSeeking: video.seeking,
         videoReadyState: video.readyState,
+        videoBufferedEnd: bufferedEnd(),
       };
     },
     /** Step forward (dir=1) or back (dir=-1). No-op if already busy or at an end. */

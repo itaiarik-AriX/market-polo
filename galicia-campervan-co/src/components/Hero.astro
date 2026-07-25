@@ -107,6 +107,11 @@ const copy = {
     Scroll
   </div>
 
+  <div class="loading-cue" data-loading-cue aria-hidden="true">
+    <span class="loading-dot"></span>
+    Loading
+  </div>
+
   <pre class="debug-readout" data-debug-readout aria-hidden="true" hidden></pre>
 </section>
 
@@ -219,6 +224,39 @@ const copy = {
     100% { transform: scaleY(0.3); opacity: 0.3; }
   }
 
+  /* Shown only while waiting for a station's video data to actually finish
+     downloading — an honest wait instead of a frozen-looking video. */
+  .loading-cue {
+    position: absolute;
+    bottom: 2.5rem;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    font-size: 0.72rem;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--fg-dim);
+    opacity: 0;
+    transition: opacity 0.25s ease;
+    pointer-events: none;
+  }
+  .loading-cue.is-visible {
+    opacity: 1;
+  }
+  .loading-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--fg-dim);
+    animation: loading-dot-pulse 1s ease-in-out infinite;
+  }
+  @keyframes loading-dot-pulse {
+    0%, 100% { opacity: 0.3; transform: scale(0.8); }
+    50% { opacity: 1; transform: scale(1.15); }
+  }
+
   @media (max-width: 640px) {
     .copy-block { bottom: 14vh; }
   }
@@ -252,6 +290,7 @@ const copy = {
     const heroStage = document.querySelector<HTMLElement>('[data-hero-stage]');
     const enquireEl = document.querySelector<HTMLElement>('#enquire');
     const scrollCue = document.querySelector<HTMLElement>('[data-scroll-cue]');
+    const loadingCue = document.querySelector<HTMLElement>('[data-loading-cue]');
     const blocks = Array.from(document.querySelectorAll<HTMLElement>('.copy-block'));
     const stills = Array.from(document.querySelectorAll<HTMLElement>('.station-still'));
     if (!canvas || !heroStage) return;
@@ -271,6 +310,12 @@ const copy = {
         if (scrollCue) scrollCue.style.opacity = '0';
         for (const block of blocks) block.classList.remove('is-visible');
         for (const still of stills) still.classList.remove('is-visible');
+      },
+      // Fires while a move is waiting for that station's video data to finish
+      // downloading (see heroStepper's isBuffered/waitForBuffer). The current
+      // still + copy are left alone during the wait — only this cue appears.
+      onBufferWait(_mode, waiting) {
+        if (loadingCue) loadingCue.classList.toggle('is-visible', waiting);
       },
       onStation(mode, stationId) {
         if (scrollCue) scrollCue.style.opacity = stationId === 'welcome' ? '1' : '0';
@@ -303,6 +348,7 @@ const copy = {
             `mode=${s.mode}  station=${s.stationIndex} (${s.stationId})  busy=${s.busy}`,
             `video.currentTime=${s.videoCurrentTime.toFixed(3)}  seeking=${s.videoSeeking}  readyState=${s.videoReadyState}`,
             `activeFrom=${s.activeFrom === null ? '-' : s.activeFrom.toFixed(3)}  activeTo=${s.activeTo === null ? '-' : s.activeTo.toFixed(3)}`,
+            `bufferedEnd=${s.videoBufferedEnd.toFixed(3)}`,
           ].join('\n');
           requestAnimationFrame(tick);
         };
