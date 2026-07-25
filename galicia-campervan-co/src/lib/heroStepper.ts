@@ -25,10 +25,10 @@ const useSmallTier =
 
 /**
  * Drives a <canvas> from a hidden <video> as a set of discrete "stations": at
- * rest it shows one station's frame; a step forward auto-plays the real video
- * forward to the next station (smooth native decode, no seek jank); a step
- * back manually scrubs `currentTime` backward with the same eased eased-tween
- * used before, since browsers don't support reverse `<video>` playback.
+ * rest it shows one station's frame; a step in either direction animates the
+ * video from the current station to the target by driving `currentTime`
+ * ourselves each frame (never native play()), so it always RESUMES from where
+ * it is and behaves identically forward, backward, and across every browser.
  */
 export function createHeroStepper(opts: HeroStepperOptions) {
   const { canvas, reduceMotion } = opts;
@@ -122,20 +122,18 @@ export function createHeroStepper(opts: HeroStepperOptions) {
     opts.onStation(mode, currentStationId(), stationIndex);
   }
 
-  // Common "land on a station" routine, shared by forward and backward moves.
-  // Fires onStation immediately (so the sharp still begins its snappy fade-in),
-  // and keeps the video's correct target frame under the crossfade — no re-seek
-  // flash, no stale frame — until the still has fully covered.
+  // Common "land on a station" routine, shared by every move. Deterministically
+  // seeks to the exact station frame (so the resting video frame is pixel-for-pixel
+  // the sharp still — no positional jump when the still crossfades in, and no
+  // dependence on where fast playback happened to stop), fires onStation so the
+  // still begins its snappy fade-in, and keeps the video's correct frame under the
+  // crossfade until the still has fully covered.
   function landOn(targetIndex: number, toTime: number) {
-    video.playbackRate = 1;
     video.pause();
-    // Only correct time if we actually drifted; the re-seek is what can flash a
-    // keyframe-approx (soft) frame right as the still fades in.
-    if (Math.abs(video.currentTime - toTime) > 0.05) video.currentTime = toTime;
+    if (Math.abs(video.currentTime - toTime) > 0.001) video.currentTime = toTime;
     stationIndex = targetIndex;
     drawCurrentFrame();
     opts.onStation(mode, currentStationId(), stationIndex);
-    // Draw a couple more frames while the still (0.22s) crossfades over, then stop.
     window.setTimeout(() => {
       stopDrawLoop();
       drawCurrentFrame();
@@ -143,42 +141,20 @@ export function createHeroStepper(opts: HeroStepperOptions) {
     }, SETTLE_MS);
   }
 
-  function playForwardTo(targetIndex: number) {
+  // Animate the video from wherever it currently is to a target station by
+  // stepping `currentTime` ourselves each frame — NOT native play(). This works
+  // identically in every browser (Chrome/Safari/Firefox), always RESUMES from the
+  // current position (we read `fromTime` and interpolate from it — never a
+  // browser-specific play()-from-0 quirk), and runs both forward and backward.
+  // We only issue a new seek when the previous one has landed (`!video.seeking`),
+  // pacing to the decoder's real throughput (cheap now thanks to dense keyframes).
+  function moveTo(targetIndex: number) {
     const fromTime = video.currentTime;
     const toTime = tl.sections[targetIndex].time;
-    // Duration is configured per-segment on the destination station.
-    const desiredMs = transitionMs(tl.sections[targetIndex]);
-    busy = true;
-    opts.onTransitionStart?.(mode);
-    startDrawLoop();
+    // The segment's duration lives on the higher-index of the two stations.
+    const dur = transitionMs(tl.sections[Math.max(stationIndex, targetIndex)]);
 
-    let settled = false;
-    function finish() {
-      if (settled) return;
-      settled = true;
-      video.removeEventListener('timeupdate', onTimeUpdate);
-      landOn(targetIndex, toTime);
-    }
-    function onTimeUpdate() {
-      if (video.currentTime >= toTime) finish();
-    }
-    video.addEventListener('timeupdate', onTimeUpdate);
-    // Play the real segment fast/slow enough that it lasts exactly `desiredMs`.
-    const realSegmentMs = Math.max(1, (toTime - fromTime) * 1000);
-    video.playbackRate = Math.max(0.25, Math.min(16, realSegmentMs / desiredMs));
-    window.setTimeout(finish, desiredMs + 400); // safety net if timeupdate is coarse
-
-    video.play().catch(() => finish());
-  }
-
-  function tweenBackwardTo(targetIndex: number) {
-    const fromTime = video.currentTime;
-    const toTime = tl.sections[targetIndex].time;
-    // Same segment as the forward move — its duration lives on the higher station
-    // (the one we're leaving), i.e. the current stationIndex.
-    const dur = transitionMs(tl.sections[stationIndex]);
-
-    if (reduceMotion) {
+    if (reduceMotion || Math.abs(toTime - fromTime) < 0.001) {
       settleAt(targetIndex, toTime);
       return;
     }
@@ -188,12 +164,6 @@ export function createHeroStepper(opts: HeroStepperOptions) {
     startDrawLoop();
     video.pause();
 
-    // Browsers can't play <video> in reverse, so we scrub currentTime backward.
-    // Firing a new seek every animation frame overwrites seeks the decoder hasn't
-    // finished, which stutters. Instead, each frame we only issue a new seek when
-    // no seek is in flight (`!video.seeking`) — pacing to the decoder's real
-    // throughput (cheap now thanks to dense keyframes). The target stays
-    // time-based, so the move still lasts ~`dur` regardless of decode speed.
     const t0 = performance.now();
     function step() {
       const t = Math.min(1, (performance.now() - t0) / dur);
@@ -202,7 +172,7 @@ export function createHeroStepper(opts: HeroStepperOptions) {
         return;
       }
       if (!video.seeking) {
-        const eased = 1 - Math.pow(1 - t, 3);
+        const eased = 1 - Math.pow(1 - t, 3); // easeOutCubic
         video.currentTime = fromTime + (toTime - fromTime) * eased;
       }
       requestAnimationFrame(step);
@@ -233,11 +203,15 @@ export function createHeroStepper(opts: HeroStepperOptions) {
       const target = stationIndex + dir;
       if (target < 0 || target >= tl.sections.length) return false;
       if (reduceMotion) {
+        // No animation, but still hold a brief cooldown so one scroll gesture
+        // (which fires many wheel events) collapses to a single station step,
+        // exactly like the animated path — never a multi-station skip.
+        busy = true;
         settleAt(target, tl.sections[target].time);
+        window.setTimeout(() => { busy = false; }, SETTLE_MS);
         return true;
       }
-      if (dir === 1) playForwardTo(target);
-      else tweenBackwardTo(target);
+      moveTo(target);
       return true;
     },
     /** Switch sequence, keeping the same station index, no animation. */
