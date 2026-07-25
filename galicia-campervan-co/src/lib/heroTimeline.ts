@@ -124,3 +124,29 @@ export function buildTimeline(tl: ModeTimeline): BuiltTimeline {
 
   return { timeAt, sectionRanges };
 }
+
+/**
+ * The scrub video is split into one small file per station-to-station stretch
+ * (see public/video/<videoBase>-seg<N>.{mp4,webm}) rather than one large file —
+ * each segment downloads in a couple of seconds on almost any connection,
+ * instead of the whole thing needing 15+ seconds before later stretches are
+ * reachable. This maps a GLOBAL video time (from timeAt above) to which
+ * segment file backs it and the LOCAL time within that segment's own file.
+ */
+export function resolveSegment(tl: ModeTimeline, globalTime: number): { index: number; localTime: number } {
+  const sections = tl.sections;
+  for (let i = 0; i < sections.length - 1; i++) {
+    const from = sections[i].time;
+    const to = sections[i + 1].time;
+    if (globalTime <= to || i === sections.length - 2) {
+      const clamped = Math.max(from, Math.min(to, globalTime));
+      return { index: i, localTime: clamped - from };
+    }
+  }
+  return { index: 0, localTime: 0 };
+}
+
+/** Number of segment files for a timeline (one fewer than the station count). */
+export function segmentCount(tl: ModeTimeline): number {
+  return Math.max(1, tl.sections.length - 1);
+}

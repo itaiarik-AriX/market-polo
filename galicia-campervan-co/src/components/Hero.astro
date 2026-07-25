@@ -318,7 +318,7 @@ const copy = {
         const tick = () => {
           const s = scrubber.getDebugState();
           readout.textContent = [
-            `mode=${s.mode}  progress=${s.progress.toFixed(3)}`,
+            `mode=${s.mode}  progress=${s.progress.toFixed(3)}  segment=${s.segmentIndex}`,
             `video.currentTime=${s.videoCurrentTime.toFixed(3)}  seeking=${s.videoSeeking}  readyState=${s.videoReadyState}`,
             `bufferedEnd=${s.videoBufferedEnd.toFixed(3)}`,
           ].join('\n');

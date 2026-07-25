@@ -1,4 +1,11 @@
-import { buildTimeline, type ModeTimeline, type BuiltTimeline, type SectionRange } from './heroTimeline';
+import {
+  buildTimeline,
+  resolveSegment,
+  segmentCount,
+  type ModeTimeline,
+  type BuiltTimeline,
+  type SectionRange,
+} from './heroTimeline';
 
 export interface ScrollScrubberOptions {
   canvas: HTMLCanvasElement;
@@ -12,14 +19,18 @@ export interface ScrollScrubberOptions {
 const useSmallTier =
   typeof window !== 'undefined' && window.matchMedia('(max-width: 820px)').matches;
 
+// How close to a segment boundary (as a fraction of the CURRENT segment's own
+// progress span) before we start preloading the neighbour — far enough ahead
+// that a small segment file has time to arrive before it's actually needed.
+const PRELOAD_MARGIN = 0.25;
+
 /**
  * Drives a <canvas> from a hidden <video> as a direct, continuous function of
- * scroll position: the user's own scroll IS the video's position — scrolling
- * down plays it forward, up plays it backward, proportionally. No animated
- * transitions, no "busy" state to wait out; the browser fetches whatever byte
- * range a seek needs on demand, same as any normal scroll-scrub video site —
- * if it hasn't downloaded yet, the frame just doesn't advance further until
- * it catches up, rather than needing any special-cased loading state.
+ * scroll position: the user's own scroll IS the video's position. Unlike a
+ * single video spanning the whole timeline, the scrub footage is split into
+ * one small file per station-to-station stretch — only the segment currently
+ * being scrolled through (plus whichever neighbour is coming up next) is ever
+ * loaded, so reaching any point never has to wait on a large, slow download.
  */
 export function createScrollScrubber(opts: ScrollScrubberOptions) {
   const { canvas, track } = opts;
@@ -29,12 +40,22 @@ export function createScrollScrubber(opts: ScrollScrubberOptions) {
   let mode = opts.initialMode;
   let tl: ModeTimeline = opts.timelines[mode];
   let built: BuiltTimeline = buildTimeline(tl);
-  let video: HTMLVideoElement = createVideoEl(tl);
   let progress = 0;
   let dpr = Math.min(window.devicePixelRatio || 1, 2);
   let drawLoopId = 0;
 
-  function createVideoEl(timeline: ModeTimeline): HTMLVideoElement {
+  // Segment video elements, keyed by segment index. Only the active one and
+  // its immediate neighbours are kept around; others are evicted to avoid
+  // piling up idle <video> elements/connections as the user scrolls far away.
+  const segCache = new Map<number, HTMLVideoElement>();
+  let activeIndex = -1;
+
+  function segmentSrc(index: number): { webm: string; mp4: string } {
+    const base = useSmallTier && tl.videoBaseSmall ? tl.videoBaseSmall : tl.videoBase;
+    return { webm: `${base}-seg${index}.webm`, mp4: `${base}-seg${index}.mp4` };
+  }
+
+  function createSegmentVideo(index: number): HTMLVideoElement {
     const v = document.createElement('video');
     v.muted = true;
     v.playsInline = true;
@@ -46,16 +67,40 @@ export function createScrollScrubber(opts: ScrollScrubberOptions) {
     v.style.pointerEvents = 'none';
     document.body.appendChild(v);
 
-    const base = useSmallTier && timeline.videoBaseSmall ? timeline.videoBaseSmall : timeline.videoBase;
-    const webm = document.createElement('source');
-    webm.src = `${base}.webm`;
-    webm.type = 'video/webm';
-    const mp4 = document.createElement('source');
-    mp4.src = `${base}.mp4`;
-    mp4.type = 'video/mp4';
-    v.append(webm, mp4);
+    const { webm, mp4 } = segmentSrc(index);
+    const webmSrc = document.createElement('source');
+    webmSrc.src = webm;
+    webmSrc.type = 'video/webm';
+    const mp4Src = document.createElement('source');
+    mp4Src.src = mp4;
+    mp4Src.type = 'video/mp4';
+    v.append(webmSrc, mp4Src);
     v.load();
     return v;
+  }
+
+  function getOrCreateSegment(index: number): HTMLVideoElement {
+    const clamped = Math.max(0, Math.min(segmentCount(tl) - 1, index));
+    let v = segCache.get(clamped);
+    if (!v) {
+      v = createSegmentVideo(clamped);
+      segCache.set(clamped, v);
+    }
+    return v;
+  }
+
+  function evictExcept(keep: Set<number>) {
+    for (const [idx, v] of segCache) {
+      if (!keep.has(idx)) {
+        v.pause();
+        v.remove();
+        segCache.delete(idx);
+      }
+    }
+  }
+
+  function activeVideo(): HTMLVideoElement | undefined {
+    return segCache.get(activeIndex);
   }
 
   function resizeCanvas() {
@@ -68,6 +113,8 @@ export function createScrollScrubber(opts: ScrollScrubberOptions) {
   }
 
   function drawCurrentFrame() {
+    const video = activeVideo();
+    if (!video) return;
     const cw = canvas.width;
     const ch = canvas.height;
     const vw = video.videoWidth;
@@ -105,6 +152,33 @@ export function createScrollScrubber(opts: ScrollScrubberOptions) {
     return scrollableDistance > 0 ? Math.max(0, Math.min(1, scrolled / scrollableDistance)) : 0;
   }
 
+  function applyProgress(p: number) {
+    const globalTime = built.timeAt(p);
+    const { index, localTime } = resolveSegment(tl, globalTime);
+
+    if (index !== activeIndex) {
+      activeIndex = index;
+      const keep = new Set([index, index - 1, index + 1]);
+      evictExcept(keep);
+    }
+
+    const video = getOrCreateSegment(index);
+    if (!video.seeking && Math.abs(video.currentTime - localTime) > 0.01) {
+      video.currentTime = localTime;
+    }
+
+    // Preload whichever neighbour we're approaching, so crossing the boundary
+    // doesn't start a fresh download from zero right when it's needed.
+    const segStartGlobal = tl.sections[index].time;
+    const segEndGlobal = tl.sections[index + 1]?.time ?? segStartGlobal;
+    const span = segEndGlobal - segStartGlobal;
+    if (span > 0) {
+      const localFrac = (globalTime - segStartGlobal) / span;
+      if (localFrac > 1 - PRELOAD_MARGIN) getOrCreateSegment(index + 1);
+      else if (localFrac < PRELOAD_MARGIN) getOrCreateSegment(index - 1);
+    }
+  }
+
   let ticking = false;
   function onScroll() {
     if (ticking) return;
@@ -112,13 +186,7 @@ export function createScrollScrubber(opts: ScrollScrubberOptions) {
     requestAnimationFrame(() => {
       ticking = false;
       progress = progressFromScroll();
-      const target = built.timeAt(progress);
-      // Only issue a new seek once the previous one has resolved — pacing to
-      // the decoder's real throughput instead of piling up seek requests
-      // faster than it can service them.
-      if (!video.seeking && Math.abs(video.currentTime - target) > 0.01) {
-        video.currentTime = target;
-      }
+      applyProgress(progress);
       opts.onProgress?.(progress, mode, built.sectionRanges);
     });
   }
@@ -127,30 +195,18 @@ export function createScrollScrubber(opts: ScrollScrubberOptions) {
   window.addEventListener('resize', resizeCanvas);
   resizeCanvas();
   startDrawLoop();
-
-  video.addEventListener('loadedmetadata', () => {
-    video.currentTime = built.timeAt(progressFromScroll());
-  });
-  video.addEventListener('seeked', drawCurrentFrame);
-
   onScroll();
 
   return {
     /** Switch sequence, preserving current scroll progress (0-1) across modes. */
     setMode(nextMode: string) {
       if (nextMode === mode) return;
-      const oldVideo = video;
+      evictExcept(new Set());
+      activeIndex = -1;
       mode = nextMode;
       tl = opts.timelines[mode];
       built = buildTimeline(tl);
-      video = createVideoEl(tl);
-      video.addEventListener('loadedmetadata', () => {
-        video.currentTime = built.timeAt(progress);
-        drawCurrentFrame();
-      });
-      video.addEventListener('seeked', drawCurrentFrame);
-      oldVideo.pause();
-      oldVideo.remove();
+      applyProgress(progress);
       opts.onProgress?.(progress, mode, built.sectionRanges);
     },
     getProgress: () => progress,
@@ -158,20 +214,23 @@ export function createScrollScrubber(opts: ScrollScrubberOptions) {
     getSectionRanges: () => built.sectionRanges,
     /** Live internal state for the temporary ?debug=1 on-screen readout. */
     getDebugState() {
-      const b = video.buffered;
+      const video = activeVideo();
+      const b = video?.buffered;
       return {
         mode,
         progress,
-        videoCurrentTime: video.currentTime,
-        videoSeeking: video.seeking,
-        videoReadyState: video.readyState,
-        videoBufferedEnd: b.length ? b.end(b.length - 1) : 0,
+        segmentIndex: activeIndex,
+        videoCurrentTime: video?.currentTime ?? 0,
+        videoSeeking: video?.seeking ?? false,
+        videoReadyState: video?.readyState ?? 0,
+        videoBufferedEnd: b && b.length ? b.end(b.length - 1) : 0,
       };
     },
     destroy() {
       window.removeEventListener('scroll', onScroll);
       window.removeEventListener('resize', resizeCanvas);
       stopDrawLoop();
+      evictExcept(new Set());
     },
   };
 }
