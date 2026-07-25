@@ -240,6 +240,15 @@ const copy = {
       timelines,
       initialMode: 'hire',
       reduceMotion,
+      // The moment a move begins, hide the sharp still + copy so the playing
+      // video underneath is visible; onStation fades the new ones back in on
+      // arrival. Without this the still sits opaquely on top of the canvas and
+      // the motion is never seen.
+      onTransitionStart() {
+        if (scrollCue) scrollCue.style.opacity = '0';
+        for (const block of blocks) block.classList.remove('is-visible');
+        for (const still of stills) still.classList.remove('is-visible');
+      },
       onStation(mode, stationId) {
         if (scrollCue) scrollCue.style.opacity = stationId === 'welcome' ? '1' : '0';
         for (const block of blocks) {

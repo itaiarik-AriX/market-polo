@@ -7,14 +7,17 @@ export interface HeroStepperOptions {
   reduceMotion: boolean;
   /** called whenever the resting station changes (after a transition completes, or a mode switch) */
   onStation: (mode: string, stationId: string, index: number) => void;
+  /** called the instant a station-to-station move begins, so overlays (the sharp
+   *  still + copy) can fade out and reveal the playing video underneath */
+  onTransitionStart?: (mode: string) => void;
 }
 
-const SETTLE_MS = 280; // extra cooldown after a transition before accepting new input
-const MAX_TWEEN_MS = 1600; // upper bound on any single transition's duration
-const MIN_TWEEN_MS = 400; // lower bound so very close stations don't feel like a hard cut
-const PLAYBACK_RATE = 8; // native playback speed for forward steps — stations can be many
-                          // real seconds apart in the source footage, so we play the segment
-                          // fast rather than waiting out its true real-time duration
+const SETTLE_MS = 200; // extra cooldown after a transition before accepting new input
+const DEFAULT_TRANSITION_S = 2.4; // fallback when a section doesn't set its own duration
+
+function transitionMs(section: { transition?: number }): number {
+  return (section.transition ?? DEFAULT_TRANSITION_S) * 1000;
+}
 
 const useSmallTier =
   typeof window !== 'undefined' && window.matchMedia('(max-width: 820px)').matches;
@@ -121,7 +124,10 @@ export function createHeroStepper(opts: HeroStepperOptions) {
   function playForwardTo(targetIndex: number) {
     const fromTime = video.currentTime;
     const toTime = tl.sections[targetIndex].time;
+    // Duration is configured per-segment on the destination station.
+    const desiredMs = transitionMs(tl.sections[targetIndex]);
     busy = true;
+    opts.onTransitionStart?.(mode);
     startDrawLoop();
 
     let settled = false;
@@ -144,12 +150,10 @@ export function createHeroStepper(opts: HeroStepperOptions) {
       if (video.currentTime >= toTime) finish();
     }
     video.addEventListener('timeupdate', onTimeUpdate);
-    // Real segment duration divided by playback rate = actual wall-clock transition
-    // time; safety net in case timeupdate fires too coarsely near the end.
-    const realSegmentMs = Math.max(0, (toTime - fromTime) * 1000);
-    const expectedMs = Math.min(MAX_TWEEN_MS, Math.max(MIN_TWEEN_MS, realSegmentMs / PLAYBACK_RATE));
-    video.playbackRate = Math.max(1, realSegmentMs / expectedMs);
-    window.setTimeout(finish, expectedMs + 400);
+    // Play the real segment fast/slow enough that it lasts exactly `desiredMs`.
+    const realSegmentMs = Math.max(1, (toTime - fromTime) * 1000);
+    video.playbackRate = Math.max(0.25, Math.min(16, realSegmentMs / desiredMs));
+    window.setTimeout(finish, desiredMs + 400); // safety net if timeupdate is coarse
 
     video.play().catch(() => finish());
   }
@@ -157,8 +161,9 @@ export function createHeroStepper(opts: HeroStepperOptions) {
   function tweenBackwardTo(targetIndex: number) {
     const fromTime = video.currentTime;
     const toTime = tl.sections[targetIndex].time;
-    const realSegmentMs = Math.max(0, (fromTime - toTime) * 1000);
-    const dur = Math.min(MAX_TWEEN_MS, Math.max(MIN_TWEEN_MS, realSegmentMs / PLAYBACK_RATE));
+    // Same segment as the forward move — its duration lives on the higher station
+    // (the one we're leaving), i.e. the current stationIndex.
+    const dur = transitionMs(tl.sections[stationIndex]);
 
     if (reduceMotion) {
       settleAt(targetIndex, toTime);
@@ -166,6 +171,7 @@ export function createHeroStepper(opts: HeroStepperOptions) {
     }
 
     busy = true;
+    opts.onTransitionStart?.(mode);
     startDrawLoop();
     const t0 = performance.now();
     function step(now: number) {
