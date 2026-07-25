@@ -71,55 +71,53 @@ const copy = {
   },
 };
 ---
-<section class="hero-track" id="top" data-hero-track>
-  <div class="hero-stage" data-hero-stage>
-    <canvas data-hero-canvas aria-hidden="true"></canvas>
+<section class="hero-stage" id="top" data-hero-stage>
+  <canvas data-hero-canvas aria-hidden="true"></canvas>
 
-    <div class="hero-stills" aria-hidden="true">
-      {stationStills.map((st) => (
-        <img
-          class="station-still"
-          data-still-mode={st.mode}
-          data-still-id={st.id}
-          src={st.src}
-          alt=""
-          loading="eager"
-          decoding="async"
-        />
-      ))}
-    </div>
-
-    <div class="hero-vignette" aria-hidden="true"></div>
-
-    <div class="hero-copy">
-      {Object.entries(copy).map(([mode, sections]) => (
-        Object.entries(sections).map(([id, block]) => (
-          <div class="copy-block" data-copy-mode={mode} data-copy-id={id}>
-            <p class="eyebrow">{block.eyebrow}</p>
-            <h2 class="serif copy-title">{block.title}</h2>
-            <p class="copy-body">{block.body}</p>
-          </div>
-        ))
-      ))}
-    </div>
-
-    <div class="scroll-cue" data-scroll-cue aria-hidden="true">
-      <span></span>
-      Scroll
-    </div>
-
-    <pre class="debug-readout" data-debug-readout aria-hidden="true" hidden></pre>
+  <div class="hero-stills" aria-hidden="true">
+    {stationStills.map((st) => (
+      <img
+        class="station-still"
+        data-still-mode={st.mode}
+        data-still-id={st.id}
+        src={st.src}
+        alt=""
+        loading="eager"
+        decoding="async"
+      />
+    ))}
   </div>
+
+  <div class="hero-vignette" aria-hidden="true"></div>
+
+  <div class="hero-copy">
+    {Object.entries(copy).map(([mode, sections]) => (
+      Object.entries(sections).map(([id, block]) => (
+        <div class="copy-block" data-copy-mode={mode} data-copy-id={id}>
+          <p class="eyebrow">{block.eyebrow}</p>
+          <h2 class="serif copy-title">{block.title}</h2>
+          <p class="copy-body">{block.body}</p>
+        </div>
+      ))
+    ))}
+  </div>
+
+  <div class="scroll-cue" data-scroll-cue aria-hidden="true">
+    <span></span>
+    Scroll
+  </div>
+
+  <div class="loading-cue" data-loading-cue aria-hidden="true">
+    <span class="loading-dot"></span>
+    Loading
+  </div>
+
+  <pre class="debug-readout" data-debug-readout aria-hidden="true" hidden></pre>
 </section>
 
 <style>
-  .hero-track {
-    position: relative;
-    height: 900vh; /* total scroll distance; more = slower, more cinematic scrub */
-  }
   .hero-stage {
-    position: sticky;
-    top: 0;
+    position: relative;
     height: 100vh;
     overflow: hidden;
     background: var(--bg);
@@ -141,7 +139,13 @@ const copy = {
     height: 100%;
     object-fit: cover;
     opacity: 0;
+    /* Snappy fade so the sharp still asserts itself the instant we land,
+       rather than a slow soft-to-sharp morph over the video frame. */
+    transition: opacity 0.22s ease-out;
     will-change: opacity;
+  }
+  .station-still.is-visible {
+    opacity: 1;
   }
   .hero-vignette {
     position: absolute;
@@ -166,7 +170,12 @@ const copy = {
     text-align: center;
     opacity: 0;
     transform: translateY(18px);
+    transition: opacity 0.32s ease, transform 0.32s ease;
     will-change: opacity, transform;
+  }
+  .copy-block.is-visible {
+    opacity: 1;
+    transform: translateY(0);
   }
   .copy-block .eyebrow {
     margin-bottom: 0.9rem;
@@ -215,12 +224,46 @@ const copy = {
     100% { transform: scaleY(0.3); opacity: 0.3; }
   }
 
+  /* Shown only while waiting for a station's video data to actually finish
+     downloading — an honest wait instead of a frozen-looking video. */
+  .loading-cue {
+    position: absolute;
+    bottom: 2.5rem;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    font-size: 0.72rem;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--fg-dim);
+    opacity: 0;
+    transition: opacity 0.25s ease;
+    pointer-events: none;
+  }
+  .loading-cue.is-visible {
+    opacity: 1;
+  }
+  .loading-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--fg-dim);
+    animation: loading-dot-pulse 1s ease-in-out infinite;
+  }
+  @keyframes loading-dot-pulse {
+    0%, 100% { opacity: 0.3; transform: scale(0.8); }
+    50% { opacity: 1; transform: scale(1.15); }
+  }
+
   @media (max-width: 640px) {
     .copy-block { bottom: 14vh; }
   }
 
   /* Temporary diagnostic readout, opt-in only via ?debug=1 — never shown to a
-     real visitor. Remove once no longer needed. */
+     real visitor. Lets a bug report be a screenshot of real internal state
+     instead of a description. Remove once no longer needed. */
   .debug-readout {
     position: absolute;
     top: 1rem;
@@ -239,87 +282,72 @@ const copy = {
 </style>
 
 <script>
-  import { createScrollScrubber } from '../lib/scrollScrubber';
+  import { createHeroStepper } from '../lib/heroStepper';
   import { timelines } from '../lib/heroTimeline';
-  import type { SectionRange } from '../lib/heroTimeline';
 
   function initHero() {
     const canvas = document.querySelector<HTMLCanvasElement>('[data-hero-canvas]');
-    const track = document.querySelector<HTMLElement>('[data-hero-track]');
+    const heroStage = document.querySelector<HTMLElement>('[data-hero-stage]');
+    const enquireEl = document.querySelector<HTMLElement>('#enquire');
     const scrollCue = document.querySelector<HTMLElement>('[data-scroll-cue]');
+    const loadingCue = document.querySelector<HTMLElement>('[data-loading-cue]');
     const blocks = Array.from(document.querySelectorAll<HTMLElement>('.copy-block'));
     const stills = Array.from(document.querySelectorAll<HTMLElement>('.station-still'));
-    if (!canvas || !track) return;
+    if (!canvas || !heroStage) return;
 
     const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-    // Fade a section's copy/still in over the first slice of its hold and out over the last.
-    const EDGE = 0.28; // fraction of each hold used for the fade in/out
-
-    function opacityForRange(p: number, start: number, end: number): number {
-      if (p < start || p > end) return 0;
-      const span = end - start;
-      const edge = span * EDGE;
-      if (p < start + edge) return (p - start) / edge;
-      if (p > end - edge) return (end - p) / edge;
-      return 1;
-    }
-
-    let latestRanges: SectionRange[] = [];
-    let latestMode = 'hire';
-
-    const scrubber = createScrollScrubber({
+    const stepper = createHeroStepper({
       canvas,
-      track,
       timelines,
       initialMode: 'hire',
-      onProgress(progress, mode, ranges: SectionRange[]) {
-        latestRanges = ranges;
-        latestMode = mode;
-        if (scrollCue) scrollCue.style.opacity = progress > 0.02 ? '0' : '1';
-        const rangeById: Record<string, SectionRange> = {};
-        for (const r of ranges) rangeById[r.id] = r;
-
+      reduceMotion,
+      // The moment a move begins, hide the sharp still + copy so the playing
+      // video underneath is visible; onStation fades the new ones back in on
+      // arrival. Without this the still sits opaquely on top of the canvas and
+      // the motion is never seen.
+      onTransitionStart() {
+        if (scrollCue) scrollCue.style.opacity = '0';
+        for (const block of blocks) block.classList.remove('is-visible');
+        for (const still of stills) still.classList.remove('is-visible');
+      },
+      // Fires while a move is waiting for that station's video data to finish
+      // downloading (see heroStepper's isBuffered/waitForBuffer). The current
+      // still + copy are left alone during the wait — only this cue appears.
+      onBufferWait(_mode, waiting) {
+        if (loadingCue) loadingCue.classList.toggle('is-visible', waiting);
+      },
+      onStation(mode, stationId) {
+        if (scrollCue) scrollCue.style.opacity = stationId === 'welcome' ? '1' : '0';
         for (const block of blocks) {
-          if (block.dataset.copyMode !== mode) {
-            block.style.opacity = '0';
-            continue;
-          }
-          const r = rangeById[block.dataset.copyId!];
-          const o = r ? opacityForRange(progress, r.start, r.end) : 0;
-          block.style.opacity = String(o);
-          block.style.transform = `translateY(${(1 - o) * 18}px)`;
+          const show = block.dataset.copyMode === mode && block.dataset.copyId === stationId;
+          block.classList.toggle('is-visible', show);
         }
-
-        // Sharp 4K still fades in as the scrub settles on its station, hiding the
-        // (softer) video frame exactly where the user dwells and reads.
         for (const still of stills) {
-          if (still.dataset.stillMode !== mode) {
-            still.style.opacity = '0';
-            continue;
-          }
-          const r = rangeById[still.dataset.stillId!];
-          still.style.opacity = r ? String(opacityForRange(progress, r.start, r.end)) : '0';
+          const show = still.dataset.stillMode === mode && still.dataset.stillId === stationId;
+          still.classList.toggle('is-visible', show);
         }
       },
     });
 
     document.addEventListener('mode-change', (e: Event) => {
       const { mode } = (e as CustomEvent).detail;
-      scrubber.setMode(mode);
+      stepper.setMode(mode);
     });
 
-    // Temporary ?debug=1 on-screen readout — off by default, only active when
-    // explicitly requested in the URL, so it never appears for a real visitor.
+    // Temporary ?debug=1 on-screen readout (see plan notes) — off by default,
+    // only active when explicitly requested in the URL, so it never appears
+    // for a real visitor.
     if (new URLSearchParams(window.location.search).get('debug') === '1') {
       const readout = document.querySelector<HTMLElement>('[data-debug-readout]');
       if (readout) {
         readout.hidden = false;
         const tick = () => {
-          const s = scrubber.getDebugState();
+          const s = stepper.getDebugState();
           readout.textContent = [
-            `mode=${s.mode}  progress=${s.progress.toFixed(3)}  segment=${s.segmentIndex}`,
+            `mode=${s.mode}  station=${s.stationIndex} (${s.stationId})  busy=${s.busy}`,
             `video.currentTime=${s.videoCurrentTime.toFixed(3)}  seeking=${s.videoSeeking}  readyState=${s.videoReadyState}`,
+            `activeFrom=${s.activeFrom === null ? '-' : s.activeFrom.toFixed(3)}  activeTo=${s.activeTo === null ? '-' : s.activeTo.toFixed(3)}`,
             `bufferedEnd=${s.videoBufferedEnd.toFixed(3)}`,
           ].join('\n');
           requestAnimationFrame(tick);
@@ -328,84 +356,68 @@ const copy = {
       }
     }
 
-    // ---- Magnetic settle-on-release ----------------------------------------
-    // Free scrubbing during the gesture — the user's own scroll directly and
-    // continuously drives the video. When scrolling stops, ease to the nearest
-    // station's centre so it never rests mid-video. Cancels the moment the user
-    // scrolls again, and releases past the last station so the page below (the
-    // enquiry form) stays reachable.
-    let snapToken = 0;
-    let isSnapping = false;
-    let settleTimer: number | undefined;
+    // ---- Discrete station navigation ---------------------------------------
+    // The hero "has focus" while the page is scrolled to the very top (it's
+    // the first section, filling the viewport). While focused, wheel/touch/key
+    // input steps one station at a time instead of scrolling the page — so the
+    // view can only ever rest on a station, never mid-video. Scrolling forward
+    // past the last station releases control to the page below; scrolling up
+    // from there returns focus and resumes exactly where the user left off.
+    function isFocused() {
+      return window.scrollY <= 1;
+    }
 
-    function animateScrollTo(targetY: number) {
-      const startY = window.scrollY;
-      const dist = targetY - startY;
-      if (Math.abs(dist) < 2) return;
-      if (reduceMotion) { window.scrollTo(0, targetY); return; }
-      // The page uses CSS scroll-behavior:smooth (nice for anchor links) but it
-      // would re-animate every programmatic scroll and fight our own easing —
-      // force instant during the snap, restore afterwards.
-      const root = document.documentElement;
-      const prevBehavior = root.style.scrollBehavior;
-      root.style.scrollBehavior = 'auto';
-      const my = ++snapToken;
-      const t0 = performance.now();
-      const dur = 520;
-      isSnapping = true;
-      function finish() {
-        isSnapping = false;
-        root.style.scrollBehavior = prevBehavior;
+    function releaseForward() {
+      if (!enquireEl) return;
+      enquireEl.scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'start' });
+    }
+
+    function handleDirection(dir: 1 | -1) {
+      if (!isFocused() || stepper.isBusy()) return;
+      const moved = stepper.step(dir);
+      if (!moved && dir === 1) releaseForward();
+      // dir === -1 with no movement (already at first station): nothing to do.
+    }
+
+    // Trackpad momentum tails off with progressively smaller deltaY ticks —
+    // ignoring weak ones stops a decaying flick from re-triggering a step
+    // after the cooldown window ends.
+    const MIN_WHEEL_DELTA = 4;
+
+    window.addEventListener('wheel', (e: WheelEvent) => {
+      if (!isFocused()) return;
+      e.preventDefault();
+      if (stepper.isBusy()) return;
+      if (Math.abs(e.deltaY) < MIN_WHEEL_DELTA) return;
+      handleDirection(e.deltaY > 0 ? 1 : -1);
+    }, { passive: false });
+
+    let touchStartY = 0;
+    window.addEventListener('touchstart', (e: TouchEvent) => {
+      if (!isFocused()) return;
+      touchStartY = e.touches[0].clientY;
+    }, { passive: true });
+    window.addEventListener('touchmove', (e: TouchEvent) => {
+      if (!isFocused()) return;
+      e.preventDefault(); // stop rubber-banding while we own the gesture
+    }, { passive: false });
+    window.addEventListener('touchend', (e: TouchEvent) => {
+      if (!isFocused()) return;
+      const dy = touchStartY - e.changedTouches[0].clientY;
+      if (Math.abs(dy) < 40) return; // ignore taps / tiny movements
+      handleDirection(dy > 0 ? 1 : -1);
+    });
+
+    window.addEventListener('keydown', (e: KeyboardEvent) => {
+      if (!isFocused()) return;
+      if (['ArrowDown', 'PageDown', ' '].includes(e.key)) {
+        e.preventDefault();
+        handleDirection(1);
+      } else if (['ArrowUp', 'PageUp'].includes(e.key)) {
+        e.preventDefault();
+        handleDirection(-1);
       }
-      function step(now: number) {
-        if (my !== snapToken) { root.style.scrollBehavior = prevBehavior; return; }
-        const t = Math.min(1, (now - t0) / dur);
-        const eased = 1 - Math.pow(1 - t, 3); // easeOutCubic
-        window.scrollTo(0, Math.round(startY + dist * eased));
-        if (t < 1) requestAnimationFrame(step);
-        else finish();
-      }
-      requestAnimationFrame(step);
-    }
-
-    function trySnap() {
-      if (reduceMotion || latestMode == null) return;
-      const ranges = latestRanges;
-      if (!ranges.length) return;
-      const rect = track.getBoundingClientRect();
-      const scrollable = rect.height - window.innerHeight;
-      if (scrollable <= 0) return;
-      const progress = Math.max(0, Math.min(1, -rect.top / scrollable));
-      const centers = ranges.map((r) => (r.start + r.end) / 2);
-      const lastCenter = centers[centers.length - 1];
-      // Past the final station: let the user continue to the form below.
-      if (progress > lastCenter + 0.01) return;
-      let best = centers[0];
-      let bestD = Infinity;
-      for (const c of centers) {
-        const d = Math.abs(c - progress);
-        if (d < bestD) { bestD = d; best = c; }
-      }
-      const trackTopDoc = window.scrollY + rect.top;
-      animateScrollTo(trackTopDoc + best * scrollable);
-    }
-
-    function onScrollForSnap() {
-      if (isSnapping) return; // ignore our own programmatic scroll
-      window.clearTimeout(settleTimer);
-      settleTimer = window.setTimeout(trySnap, 140);
-    }
-    function cancelActiveSnap() {
-      if (isSnapping) { snapToken++; isSnapping = false; }
-    }
-
-    if (!reduceMotion) {
-      window.addEventListener('scroll', onScrollForSnap, { passive: true });
-      // Any fresh user intent cancels an in-flight snap so it never fights them.
-      window.addEventListener('wheel', cancelActiveSnap, { passive: true });
-      window.addEventListener('touchmove', cancelActiveSnap, { passive: true });
-      window.addEventListener('keydown', cancelActiveSnap);
-    }
+    });
   }
 
   initHero();
