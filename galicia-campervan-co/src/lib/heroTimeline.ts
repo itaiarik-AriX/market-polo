@@ -1,71 +1,146 @@
-// Single source of truth for each mode's stations. The site steps discretely
-// between these — one scroll gesture (or swipe, or arrow key) moves exactly
-// one station forward or back, auto-playing the footage between them; it
-// never rests mid-video. Scroll footage is split into one small file per
-// station-to-station stretch (see public/video/<videoBase>-seg<N>.{mp4,webm})
-// rather than one large file spanning the whole thing — segment `i` covers
-// the stretch between station `i` and station `i+1`.
+// Single source of truth for each mode's scroll journey.
+//
+// The scroll distance is divided into alternating segments:
+//   HOLD   — the sequence freezes on one frame while a section's copy is shown
+//   MOTION — the sequence scrubs from the previous hold's frame to the next
+//
+// Both the canvas scrubber (scroll -> frame) and the Hero copy (scroll -> which
+// text is visible) are derived from the same `sections` list, so they can never
+// drift out of sync. Frame numbers are 0-based indices into the sequence
+// (file 0001.webp = index 0). Nothing here is time-based: the user's scroll
+// position IS the position in the sequence, always, with no animation of its
+// own — so scrolling never fights the user.
 
 export interface Section {
   /** stable id, matches data-copy-id / data-still-id in Hero.astro */
   id: string;
-  /** timestamp (seconds) into the ORIGINAL full-length footage this station
-   *  rests on — kept for reference/documentation; seeking itself is driven by
-   *  each segment file's own natural duration, not this value. */
-  time: number;
-  /**
-   * How long (seconds) the animated move takes when travelling INTO this
-   * station from the previous one. The first station has no incoming move,
-   * so its value is ignored. Tune these freely to pace each transition; the
-   * backward step reuses the same value for the same segment. Falls back to
-   * DEFAULT_TRANSITION_S if omitted.
-   */
-  transition?: number;
+  /** 0-based frame index to freeze on during this section's hold */
+  frame: number;
+  /** relative scroll span to pause on this frame (bigger = longer read time) */
+  hold: number;
+  /** relative scroll span of the motion leading INTO this hold (ignored for the first section) */
+  motion: number;
 }
 
 export interface ModeTimeline {
-  /** video path prefix, e.g. "/video/hire" — segment files are named
-   * "<videoBase>-seg<N>.mp4" / ".webm" for N in [0, sections.length - 2] */
-  videoBase: string;
-  /** optional lighter/smaller video base for small screens; falls back to videoBase if absent */
-  videoBaseSmall?: string;
+  /** full-resolution frames (desktop / large screens) */
+  basePath: string;
+  /** optional lighter frames for small screens; falls back to basePath if absent */
+  basePathSmall?: string;
   /** optional folder of high-res per-station stills, named <section id>.<ext> */
   stationsBase?: string;
-  /** file extension for station stills */
+  /** file extension for station stills (defaults to ext) */
   stationsExt?: string;
+  frameCount: number;
+  pad: number;
+  ext: string;
   sections: Section[];
 }
 
+// Station frame indices are the source timestamps on the 12fps grid the frames
+// were extracted at (frame = round(seconds * 12)) — welcome 0.000s, exterior
+// 6.757s, amenities 18.936s, view 30.197s, closing 38.038s.
 export const timelines: Record<string, ModeTimeline> = {
   hire: {
-    videoBase: '/video/hire',
+    basePath: '/sequences/hire/',
+    basePathSmall: '/sequences/hire-sm/',
     stationsBase: '/sequences/hire-stations/',
     stationsExt: 'webp',
+    frameCount: 457,
+    pad: 4,
+    ext: 'webp',
     sections: [
-      { id: 'welcome', time: 0 },
-      // `transition` = seconds the animated move into this station takes. Tweak
-      // these to pace each segment independently (welcome has no incoming move).
-      { id: 'exterior', time: 6.757, transition: 2.4 },
-      { id: 'amenities', time: 18.936, transition: 3.2 },
-      { id: 'view', time: 30.197, transition: 2.8 },
-      { id: 'closing', time: 38.038, transition: 2.2 },
+      // `hold` = how much scroll distance is spent paused here reading the copy;
+      // `motion` = how much scroll distance the move INTO this station takes
+      // (bigger = slower/more cinematic). Both are relative weights — tune freely.
+      { id: 'welcome', frame: 0, hold: 1.1, motion: 0 },
+      { id: 'exterior', frame: 81, hold: 1.2, motion: 2.4 },
+      { id: 'amenities', frame: 227, hold: 1.2, motion: 3.0 },
+      { id: 'view', frame: 362, hold: 1.2, motion: 2.8 },
+      { id: 'closing', frame: 456, hold: 1.6, motion: 2.0 },
     ],
   },
-  // Build mode uses a generated placeholder gradient video for now. TODO: give
-  // it real footage once it exists, matching the hire timeline's structure.
+  // Build mode still uses placeholder frames for now; evenly-spaced holds.
   build: {
-    videoBase: '/video/build-placeholder',
+    basePath: '/sequences/build/',
+    frameCount: 60,
+    pad: 4,
+    ext: 'svg',
     sections: [
-      { id: 'welcome', time: 0 },
-      { id: 'engineering', time: 1.7, transition: 1.2 },
-      { id: 'joinery', time: 2.9, transition: 1.2 },
-      { id: 'finish', time: 4.2, transition: 1.2 },
-      { id: 'closing', time: 4.9, transition: 1.0 },
+      { id: 'welcome', frame: 0, hold: 1.1, motion: 0 },
+      { id: 'engineering', frame: 20, hold: 1.2, motion: 2.4 },
+      { id: 'joinery', frame: 35, hold: 1.2, motion: 1.8 },
+      { id: 'finish', frame: 50, hold: 1.2, motion: 2.4 },
+      { id: 'closing', frame: 59, hold: 1.6, motion: 1.6 },
     ],
   },
 };
 
-/** Number of segment files for a timeline (one fewer than the station count). */
-export function segmentCount(tl: ModeTimeline): number {
-  return Math.max(1, tl.sections.length - 1);
+interface Segment {
+  kind: 'hold' | 'motion';
+  fromFrame: number;
+  toFrame: number;
+  start: number; // normalized progress 0-1
+  end: number;
+}
+
+export interface SectionRange {
+  id: string;
+  /** normalized progress range where this section's copy should be visible */
+  start: number;
+  end: number;
+}
+
+export interface BuiltTimeline {
+  frameAt: (progress: number) => number;
+  sectionRanges: SectionRange[];
+  frameCount: number;
+  /** the frame each station rests on — used to prioritise loading those first */
+  stationFrames: number[];
+}
+
+export function buildTimeline(tl: ModeTimeline): BuiltTimeline {
+  const segments: Segment[] = [];
+  let totalWeight = 0;
+  for (let i = 0; i < tl.sections.length; i++) {
+    const s = tl.sections[i];
+    if (i > 0) totalWeight += s.motion;
+    totalWeight += s.hold;
+  }
+
+  let acc = 0;
+  const sectionRanges: SectionRange[] = [];
+  for (let i = 0; i < tl.sections.length; i++) {
+    const s = tl.sections[i];
+    if (i > 0) {
+      const prev = tl.sections[i - 1];
+      const w = s.motion / totalWeight;
+      segments.push({ kind: 'motion', fromFrame: prev.frame, toFrame: s.frame, start: acc, end: acc + w });
+      acc += w;
+    }
+    const hw = s.hold / totalWeight;
+    segments.push({ kind: 'hold', fromFrame: s.frame, toFrame: s.frame, start: acc, end: acc + hw });
+    sectionRanges.push({ id: s.id, start: acc, end: acc + hw });
+    acc += hw;
+  }
+
+  function frameAt(progress: number): number {
+    const p = Math.max(0, Math.min(1, progress));
+    for (const seg of segments) {
+      if (p <= seg.end || seg === segments[segments.length - 1]) {
+        if (seg.kind === 'hold') return seg.fromFrame;
+        const local = seg.end > seg.start ? (p - seg.start) / (seg.end - seg.start) : 0;
+        const f = seg.fromFrame + (seg.toFrame - seg.fromFrame) * Math.max(0, Math.min(1, local));
+        return Math.round(f);
+      }
+    }
+    return tl.sections[tl.sections.length - 1].frame;
+  }
+
+  return {
+    frameAt,
+    sectionRanges,
+    frameCount: tl.frameCount,
+    stationFrames: tl.sections.map((s) => s.frame),
+  };
 }
