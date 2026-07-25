@@ -132,7 +132,9 @@ const copy = {
     height: 100%;
     object-fit: cover;
     opacity: 0;
-    transition: opacity 0.5s ease;
+    /* Snappy fade so the sharp still asserts itself the instant we land,
+       rather than a slow soft-to-sharp morph over the video frame. */
+    transition: opacity 0.22s ease-out;
     will-change: opacity;
   }
   .station-still.is-visible {
@@ -161,7 +163,7 @@ const copy = {
     text-align: center;
     opacity: 0;
     transform: translateY(18px);
-    transition: opacity 0.45s ease, transform 0.45s ease;
+    transition: opacity 0.32s ease, transform 0.32s ease;
     will-change: opacity, transform;
   }
   .copy-block.is-visible {

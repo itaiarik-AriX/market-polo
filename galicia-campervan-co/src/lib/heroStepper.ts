@@ -12,7 +12,8 @@ export interface HeroStepperOptions {
   onTransitionStart?: (mode: string) => void;
 }
 
-const SETTLE_MS = 200; // extra cooldown after a transition before accepting new input
+const SETTLE_MS = 260; // keep drawing the correct frame under the still's 0.22s crossfade,
+                       // and act as the cooldown before the next input is accepted
 const DEFAULT_TRANSITION_S = 2.4; // fallback when a section doesn't set its own duration
 
 function transitionMs(section: { transition?: number }): number {
@@ -121,6 +122,27 @@ export function createHeroStepper(opts: HeroStepperOptions) {
     opts.onStation(mode, currentStationId(), stationIndex);
   }
 
+  // Common "land on a station" routine, shared by forward and backward moves.
+  // Fires onStation immediately (so the sharp still begins its snappy fade-in),
+  // and keeps the video's correct target frame under the crossfade — no re-seek
+  // flash, no stale frame — until the still has fully covered.
+  function landOn(targetIndex: number, toTime: number) {
+    video.playbackRate = 1;
+    video.pause();
+    // Only correct time if we actually drifted; the re-seek is what can flash a
+    // keyframe-approx (soft) frame right as the still fades in.
+    if (Math.abs(video.currentTime - toTime) > 0.05) video.currentTime = toTime;
+    stationIndex = targetIndex;
+    drawCurrentFrame();
+    opts.onStation(mode, currentStationId(), stationIndex);
+    // Draw a couple more frames while the still (0.22s) crossfades over, then stop.
+    window.setTimeout(() => {
+      stopDrawLoop();
+      drawCurrentFrame();
+      busy = false;
+    }, SETTLE_MS);
+  }
+
   function playForwardTo(targetIndex: number) {
     const fromTime = video.currentTime;
     const toTime = tl.sections[targetIndex].time;
@@ -135,16 +157,7 @@ export function createHeroStepper(opts: HeroStepperOptions) {
       if (settled) return;
       settled = true;
       video.removeEventListener('timeupdate', onTimeUpdate);
-      video.playbackRate = 1;
-      stationIndex = targetIndex;
-      video.pause();
-      video.currentTime = toTime;
-      opts.onStation(mode, currentStationId(), stationIndex);
-      window.setTimeout(() => {
-        stopDrawLoop();
-        drawCurrentFrame();
-        busy = false;
-      }, SETTLE_MS);
+      landOn(targetIndex, toTime);
     }
     function onTimeUpdate() {
       if (video.currentTime >= toTime) finish();
@@ -173,22 +186,26 @@ export function createHeroStepper(opts: HeroStepperOptions) {
     busy = true;
     opts.onTransitionStart?.(mode);
     startDrawLoop();
+    video.pause();
+
+    // Browsers can't play <video> in reverse, so we scrub currentTime backward.
+    // Firing a new seek every animation frame overwrites seeks the decoder hasn't
+    // finished, which stutters. Instead, each frame we only issue a new seek when
+    // no seek is in flight (`!video.seeking`) — pacing to the decoder's real
+    // throughput (cheap now thanks to dense keyframes). The target stays
+    // time-based, so the move still lasts ~`dur` regardless of decode speed.
     const t0 = performance.now();
-    function step(now: number) {
-      const t = Math.min(1, (now - t0) / dur);
-      const eased = 1 - Math.pow(1 - t, 3);
-      video.currentTime = fromTime + (toTime - fromTime) * eased;
-      if (t < 1) {
-        requestAnimationFrame(step);
-      } else {
-        stationIndex = targetIndex;
-        opts.onStation(mode, currentStationId(), stationIndex);
-        window.setTimeout(() => {
-          stopDrawLoop();
-          drawCurrentFrame();
-          busy = false;
-        }, SETTLE_MS);
+    function step() {
+      const t = Math.min(1, (performance.now() - t0) / dur);
+      if (t >= 1) {
+        landOn(targetIndex, toTime);
+        return;
       }
+      if (!video.seeking) {
+        const eased = 1 - Math.pow(1 - t, 3);
+        video.currentTime = fromTime + (toTime - fromTime) * eased;
+      }
+      requestAnimationFrame(step);
     }
     requestAnimationFrame(step);
   }
