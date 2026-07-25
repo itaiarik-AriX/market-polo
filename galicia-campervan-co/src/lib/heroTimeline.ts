@@ -1,20 +1,22 @@
-// Single source of truth for each mode's stations. The site steps discretely
-// between these — scrolling never rests mid-video; each scroll gesture moves
-// exactly one station forward or back, auto-playing the footage between them.
+// Single source of truth for each mode's scroll journey. The user's own scroll
+// continuously and directly drives the video's position — scrolling down plays
+// it forward, scrolling up plays it backward, proportionally. Scroll distance
+// is divided into alternating weighted segments:
+//   HOLD   — the video pins on one station's frame while its copy is readable
+//   MOTION — the video scrubs from the previous hold's time to the next
+// Both weights are relative (bigger = more scroll distance = slower/longer),
+// tune them freely per station while testing.
 
 export interface Section {
   /** stable id, matches data-copy-id / data-still-id in Hero.astro */
   id: string;
   /** timestamp (seconds) into the mode's video this station rests on */
   time: number;
-  /**
-   * How long (seconds) the animated move takes when travelling INTO this station
-   * from the previous one — i.e. the duration of the segment that ends here.
-   * The first station has no incoming segment, so its value is ignored.
-   * Tune these freely to pace each transition; the backward step reuses the same
-   * value for the same segment. Falls back to DEFAULT_TRANSITION_S if omitted.
-   */
-  transition?: number;
+  /** relative scroll weight to dwell/read at this station (bigger = longer pause) */
+  hold?: number;
+  /** relative scroll weight for the motion INTO this station from the previous
+   *  one (bigger = more scroll needed = feels slower). Ignored for the first section. */
+  motion?: number;
 }
 
 export interface ModeTimeline {
@@ -30,19 +32,23 @@ export interface ModeTimeline {
   sections: Section[];
 }
 
+const DEFAULT_HOLD = 1.2;
+const DEFAULT_MOTION = 2.0;
+
 export const timelines: Record<string, ModeTimeline> = {
   hire: {
     videoBase: '/video/hire',
     stationsBase: '/sequences/hire-stations/',
     stationsExt: 'webp',
     sections: [
-      { id: 'welcome', time: 0 },
-      // `transition` = seconds the animated move into this station takes. Tweak
-      // these to pace each segment independently (welcome has no incoming move).
-      { id: 'exterior', time: 6.757, transition: 2.4 },
-      { id: 'amenities', time: 18.936, transition: 3.2 },
-      { id: 'view', time: 30.197, transition: 2.8 },
-      { id: 'closing', time: 38.038, transition: 2.2 },
+      { id: 'welcome', time: 0, hold: 1.1 },
+      // `motion` = relative scroll distance for the move INTO this station
+      // (bigger = slower); `hold` = relative scroll distance spent dwelling
+      // on it before continuing. Tune independently per stop.
+      { id: 'exterior', time: 6.757, hold: 1.2, motion: 2.0 },
+      { id: 'amenities', time: 18.936, hold: 1.2, motion: 2.6 },
+      { id: 'view', time: 30.197, hold: 1.2, motion: 2.3 },
+      { id: 'closing', time: 38.038, hold: 1.6, motion: 1.8 },
     ],
   },
   // Build mode uses a generated placeholder gradient video for now. TODO: give
@@ -50,11 +56,71 @@ export const timelines: Record<string, ModeTimeline> = {
   build: {
     videoBase: '/video/build-placeholder',
     sections: [
-      { id: 'welcome', time: 0 },
-      { id: 'engineering', time: 1.7, transition: 1.2 },
-      { id: 'joinery', time: 2.9, transition: 1.2 },
-      { id: 'finish', time: 4.2, transition: 1.2 },
-      { id: 'closing', time: 4.9, transition: 1.0 },
+      { id: 'welcome', time: 0, hold: 1.1 },
+      { id: 'engineering', time: 1.7, hold: 1.2, motion: 1.6 },
+      { id: 'joinery', time: 2.9, hold: 1.2, motion: 1.4 },
+      { id: 'finish', time: 4.2, hold: 1.2, motion: 1.6 },
+      { id: 'closing', time: 4.9, hold: 1.6, motion: 1.4 },
     ],
   },
 };
+
+interface Segment {
+  kind: 'hold' | 'motion';
+  fromTime: number;
+  toTime: number;
+  start: number; // normalized progress 0-1
+  end: number;
+}
+
+export interface SectionRange {
+  id: string;
+  /** normalized progress range where this section's copy/still should be visible */
+  start: number;
+  end: number;
+}
+
+export interface BuiltTimeline {
+  timeAt: (progress: number) => number;
+  sectionRanges: SectionRange[];
+}
+
+export function buildTimeline(tl: ModeTimeline): BuiltTimeline {
+  const segments: Segment[] = [];
+  let totalWeight = 0;
+  for (let i = 0; i < tl.sections.length; i++) {
+    const s = tl.sections[i];
+    if (i > 0) totalWeight += s.motion ?? DEFAULT_MOTION;
+    totalWeight += s.hold ?? DEFAULT_HOLD;
+  }
+
+  let acc = 0;
+  const sectionRanges: SectionRange[] = [];
+  for (let i = 0; i < tl.sections.length; i++) {
+    const s = tl.sections[i];
+    if (i > 0) {
+      const prev = tl.sections[i - 1];
+      const w = (s.motion ?? DEFAULT_MOTION) / totalWeight;
+      segments.push({ kind: 'motion', fromTime: prev.time, toTime: s.time, start: acc, end: acc + w });
+      acc += w;
+    }
+    const hw = (s.hold ?? DEFAULT_HOLD) / totalWeight;
+    segments.push({ kind: 'hold', fromTime: s.time, toTime: s.time, start: acc, end: acc + hw });
+    sectionRanges.push({ id: s.id, start: acc, end: acc + hw });
+    acc += hw;
+  }
+
+  function timeAt(progress: number): number {
+    const p = Math.max(0, Math.min(1, progress));
+    for (const seg of segments) {
+      if (p <= seg.end || seg === segments[segments.length - 1]) {
+        if (seg.kind === 'hold') return seg.fromTime;
+        const local = seg.end > seg.start ? (p - seg.start) / (seg.end - seg.start) : 0;
+        return seg.fromTime + (seg.toTime - seg.fromTime) * Math.max(0, Math.min(1, local));
+      }
+    }
+    return tl.sections[tl.sections.length - 1].time;
+  }
+
+  return { timeAt, sectionRanges };
+}
