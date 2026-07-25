@@ -106,6 +106,8 @@ const copy = {
     <span></span>
     Scroll
   </div>
+
+  <pre class="debug-readout" data-debug-readout aria-hidden="true" hidden></pre>
 </section>
 
 <style>
@@ -220,6 +222,25 @@ const copy = {
   @media (max-width: 640px) {
     .copy-block { bottom: 14vh; }
   }
+
+  /* Temporary diagnostic readout, opt-in only via ?debug=1 — never shown to a
+     real visitor. Lets a bug report be a screenshot of real internal state
+     instead of a description. Remove once no longer needed. */
+  .debug-readout {
+    position: absolute;
+    top: 1rem;
+    left: 1rem;
+    z-index: 20;
+    margin: 0;
+    padding: 0.6rem 0.8rem;
+    background: rgba(0, 0, 0, 0.75);
+    color: #7CFC9A;
+    font-size: 0.72rem;
+    line-height: 1.5;
+    border-radius: 6px;
+    pointer-events: none;
+    white-space: pre;
+  }
 </style>
 
 <script>
@@ -268,6 +289,26 @@ const copy = {
       const { mode } = (e as CustomEvent).detail;
       stepper.setMode(mode);
     });
+
+    // Temporary ?debug=1 on-screen readout (see plan notes) — off by default,
+    // only active when explicitly requested in the URL, so it never appears
+    // for a real visitor.
+    if (new URLSearchParams(window.location.search).get('debug') === '1') {
+      const readout = document.querySelector<HTMLElement>('[data-debug-readout]');
+      if (readout) {
+        readout.hidden = false;
+        const tick = () => {
+          const s = stepper.getDebugState();
+          readout.textContent = [
+            `mode=${s.mode}  station=${s.stationIndex} (${s.stationId})  busy=${s.busy}`,
+            `video.currentTime=${s.videoCurrentTime.toFixed(3)}  seeking=${s.videoSeeking}  readyState=${s.videoReadyState}`,
+            `activeFrom=${s.activeFrom === null ? '-' : s.activeFrom.toFixed(3)}  activeTo=${s.activeTo === null ? '-' : s.activeTo.toFixed(3)}`,
+          ].join('\n');
+          requestAnimationFrame(tick);
+        };
+        requestAnimationFrame(tick);
+      }
+    }
 
     // ---- Discrete station navigation ---------------------------------------
     // The hero "has focus" while the page is scrolled to the very top (it's

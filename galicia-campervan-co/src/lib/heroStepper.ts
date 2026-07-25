@@ -42,6 +42,11 @@ export function createHeroStepper(opts: HeroStepperOptions) {
   let busy = false;
   let dpr = Math.min(window.devicePixelRatio || 1, 2);
   let drawLoopId = 0;
+  // Set only while an animated move is in flight; null at rest. Exposed via
+  // getDebugState() so a live transition's endpoints are visible on-screen
+  // (behind ?debug=1) instead of having to infer them from a description.
+  let activeFrom: number | null = null;
+  let activeTo: number | null = null;
 
   function createVideoEl(timeline: ModeTimeline): HTMLVideoElement {
     const v = document.createElement('video');
@@ -113,12 +118,41 @@ export function createHeroStepper(opts: HeroStepperOptions) {
     return tl.sections[stationIndex].id;
   }
 
+  // Clears `busy` once BOTH a minimum cooldown has elapsed AND the video has no
+  // seek in flight — never on a fixed timer alone. Under a real (non-instant)
+  // network, a corrective seek can easily take longer than SETTLE_MS; clearing
+  // busy on the timer regardless would let the next scroll fire while that seek
+  // is still resolving, racing its own seeks against the leftover one on the same
+  // video element — exactly the kind of "jumps to an unexpected frame" glitch
+  // that's invisible on localhost (where seeks are near-instant) but real over
+  // an actual connection. A hard safety-net timeout still force-clears busy if a
+  // seek genuinely never resolves (e.g. connection lost), so input can't lock up.
+  function waitForSettle(onDone: () => void) {
+    let timerDone = false;
+    let finished = false;
+    function finish() {
+      if (finished) return;
+      finished = true;
+      video.removeEventListener('seeked', maybeFinish);
+      onDone();
+    }
+    function maybeFinish() {
+      if (timerDone && !video.seeking) finish();
+    }
+    window.setTimeout(() => { timerDone = true; maybeFinish(); }, SETTLE_MS);
+    window.setTimeout(finish, SETTLE_MS + 6000); // safety net: never lock up input forever
+    video.addEventListener('seeked', maybeFinish);
+    maybeFinish();
+  }
+
   function settleAt(index: number, time: number) {
     stationIndex = index;
     video.pause();
     video.currentTime = time;
     stopDrawLoop();
     drawCurrentFrame();
+    activeFrom = null;
+    activeTo = null;
     opts.onStation(mode, currentStationId(), stationIndex);
   }
 
@@ -141,12 +175,14 @@ export function createHeroStepper(opts: HeroStepperOptions) {
     if (short) video.currentTime = toTime;
     stationIndex = targetIndex;
     drawCurrentFrame();
+    activeFrom = null;
+    activeTo = null;
     opts.onStation(mode, currentStationId(), stationIndex);
-    window.setTimeout(() => {
+    waitForSettle(() => {
       stopDrawLoop();
       drawCurrentFrame();
       busy = false;
-    }, SETTLE_MS);
+    });
   }
 
   // Animate the video from wherever it currently is to a target station by
@@ -169,6 +205,8 @@ export function createHeroStepper(opts: HeroStepperOptions) {
     }
 
     busy = true;
+    activeFrom = fromTime;
+    activeTo = toTime;
     opts.onTransitionStart?.(mode);
     startDrawLoop();
     video.pause();
@@ -206,6 +244,21 @@ export function createHeroStepper(opts: HeroStepperOptions) {
     getStationIndex: () => stationIndex,
     getStationCount: () => tl.sections.length,
     getMode: () => mode,
+    /** Live internal state for the temporary ?debug=1 on-screen readout — lets a
+     *  screenshot capture exactly what's happening instead of a description. */
+    getDebugState() {
+      return {
+        mode,
+        stationIndex,
+        stationId: currentStationId(),
+        busy,
+        activeFrom,
+        activeTo,
+        videoCurrentTime: video.currentTime,
+        videoSeeking: video.seeking,
+        videoReadyState: video.readyState,
+      };
+    },
     /** Step forward (dir=1) or back (dir=-1). No-op if already busy or at an end. */
     step(dir: 1 | -1): boolean {
       if (busy) return false;
@@ -217,7 +270,7 @@ export function createHeroStepper(opts: HeroStepperOptions) {
         // exactly like the animated path — never a multi-station skip.
         busy = true;
         settleAt(target, tl.sections[target].time);
-        window.setTimeout(() => { busy = false; }, SETTLE_MS);
+        waitForSettle(() => { busy = false; });
         return true;
       }
       moveTo(target);
