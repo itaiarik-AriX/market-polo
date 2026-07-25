@@ -128,9 +128,17 @@ export function createHeroStepper(opts: HeroStepperOptions) {
   // dependence on where fast playback happened to stop), fires onStation so the
   // still begins its snappy fade-in, and keeps the video's correct frame under the
   // crossfade until the still has fully covered.
-  function landOn(targetIndex: number, toTime: number) {
+  //
+  // The correction is direction-aware ("forward" = whether this move is advancing
+  // toward a later timestamp): browsers don't seek frame-exactly, so the decoder can
+  // land a hair PAST toTime in the direction of travel. Only correct if we haven't
+  // yet reached toTime in that direction — never seek the opposite way, since that's
+  // a visible snap-back against the motion the user just watched (the sub-frame
+  // overshoot itself is imperceptible on a moving shot).
+  function landOn(targetIndex: number, toTime: number, forward: boolean) {
     video.pause();
-    if (Math.abs(video.currentTime - toTime) > 0.001) video.currentTime = toTime;
+    const short = forward ? video.currentTime < toTime - 0.001 : video.currentTime > toTime + 0.001;
+    if (short) video.currentTime = toTime;
     stationIndex = targetIndex;
     drawCurrentFrame();
     opts.onStation(mode, currentStationId(), stationIndex);
@@ -151,6 +159,7 @@ export function createHeroStepper(opts: HeroStepperOptions) {
   function moveTo(targetIndex: number) {
     const fromTime = video.currentTime;
     const toTime = tl.sections[targetIndex].time;
+    const forward = toTime > fromTime;
     // The segment's duration lives on the higher-index of the two stations.
     const dur = transitionMs(tl.sections[Math.max(stationIndex, targetIndex)]);
 
@@ -168,7 +177,7 @@ export function createHeroStepper(opts: HeroStepperOptions) {
     function step() {
       const t = Math.min(1, (performance.now() - t0) / dur);
       if (t >= 1) {
-        landOn(targetIndex, toTime);
+        landOn(targetIndex, toTime, forward);
         return;
       }
       if (!video.seeking) {
