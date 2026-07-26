@@ -110,15 +110,27 @@ const copy = {
       Scroll
     </div>
 
-    <img
-      class="hero-logo"
-      src="/logo-light.webp"
-      alt="Coruña Campervan"
-      width="560"
-      height="534"
-      loading="eager"
-      decoding="async"
-    />
+    <div class="hero-brand">
+      <img
+        class="hero-brand-glow"
+        src="/logo-glow.webp"
+        alt=""
+        aria-hidden="true"
+        width="844"
+        height="818"
+        loading="eager"
+        decoding="async"
+      />
+      <img
+        class="hero-brand-mark"
+        src="/logo-light.webp"
+        alt="Coruña Campervan"
+        width="560"
+        height="534"
+        loading="eager"
+        decoding="async"
+      />
+    </div>
 
     <pre class="debug-readout" data-debug-readout aria-hidden="true" hidden></pre>
   </div>
@@ -227,30 +239,71 @@ const copy = {
     100% { transform: scaleY(0.3); opacity: 0.3; }
   }
 
-  /* Brand badge, bottom-right. Kept as live DOM rather than baked into the
-     frames so it stays crisp at any DPR and is never cropped away by the
-     canvas's object-fit: cover on narrow screens.
-     Note: the frames themselves are now the untouched footage — the earlier
-     baked-in defocus that hid the source's burned-in tool marks was removed at
-     the user's request, so those marks are visible in this corner again. */
-  .hero-logo {
+  /* Brand badge, bottom-right, sitting in its own soft shadow.
+     The frames are untouched footage, so the source's burned-in tool marks are
+     still in this corner; the shadow is what hides them. It is the logo's OWN
+     silhouette (see scripts note: gaps closed, exterior flood-filled, feathered)
+     rather than a rectangle, so it reads as light falling behind the badge
+     instead of a patch laid over the picture.
+     Kept as live DOM rather than baked into the frames so it stays crisp at any
+     DPR and is never cropped by the canvas's object-fit: cover. */
+  .hero-brand {
     position: absolute;
-    right: 2vw;
-    bottom: 2.2vh;
-    height: clamp(74px, 12vh, 142px);
-    width: auto;
+    right: 4vw;
+    bottom: 6vh;
+    height: clamp(84px, 13.5vh, 160px);
+    aspect-ratio: 560 / 534;
     pointer-events: none;
-    filter: drop-shadow(0 2px 12px rgba(0, 0, 0, 0.5));
+    /* Default: a small shadow, there purely to lift the badge off the picture.
+       object-fit: cover crops the marks off the frame completely on portrait
+       screens, so on those there is nothing to hide and the shadow can stay
+       light. The heavier, mark-covering version is scoped to the aspect ratios
+       that actually expose them — see below. */
+    --glow-spread: 190%;
+    --glow-drop-x: 0%;
+    --glow-drop-y: 8%;
+    --glow-strength: 0.55;
+  }
+  .hero-brand-glow {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: var(--glow-spread);
+    height: auto;
+    transform: translate(calc(-50% + var(--glow-drop-x)), calc(-50% + var(--glow-drop-y)));
+    opacity: var(--glow-strength);
+  }
+  .hero-brand-mark {
+    position: relative; /* above the glow */
+    display: block;
+    height: 100%;
+    width: auto;
     opacity: 0.95;
+  }
+
+  /* The burned-in marks sit at x>=1580, y>=878 of each 1920x1080 frame — hard
+     against the bottom-right corner. Under object-fit: cover they are only on
+     screen between these two aspect ratios: anything narrower crops the frame's
+     right edge in past them, anything wider crops its bottom edge up past them.
+     (Verified across viewports from 360x780 to 2560x1080.) Only here does the
+     shadow have to do real work, so only here does it spread wide and go fully
+     opaque at the core — measured residual 0.17, against 4.44 with it hidden. */
+  @media (min-aspect-ratio: 287 / 250) and (max-aspect-ratio: 71 / 25) {
+    .hero-brand {
+      --glow-spread: 450%;
+      --glow-drop-x: -2%;
+      --glow-drop-y: 14%;
+      --glow-strength: 1;
+    }
   }
 
   @media (max-width: 640px) {
     .copy-block { bottom: 14vh; }
     /* Smaller on phones so it never crowds the copy */
-    .hero-logo {
-      height: clamp(58px, 9vh, 92px);
-      right: 4vw;
-      bottom: 2vh;
+    .hero-brand {
+      height: clamp(66px, 10vh, 104px);
+      right: 5vw;
+      bottom: 4.5vh;
     }
   }
 
