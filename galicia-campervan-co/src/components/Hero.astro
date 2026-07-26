@@ -112,12 +112,22 @@ const copy = {
 
     <div class="hero-brand">
       <img
-        class="hero-brand-glow"
+        class="hero-brand-shadow hero-brand-shadow--ambient"
         src="/logo-glow.webp"
         alt=""
         aria-hidden="true"
-        width="844"
-        height="818"
+        width="864"
+        height="838"
+        loading="eager"
+        decoding="async"
+      />
+      <img
+        class="hero-brand-shadow hero-brand-shadow--contact"
+        src="/logo-glow.webp"
+        alt=""
+        aria-hidden="true"
+        width="864"
+        height="838"
         loading="eager"
         decoding="async"
       />
@@ -240,13 +250,14 @@ const copy = {
   }
 
   /* Brand badge, bottom-right, sitting in its own soft shadow.
-     The frames are untouched footage, so the source's burned-in tool marks are
-     still in this corner; the shadow is what hides them. It is the logo's OWN
-     silhouette (see scripts note: gaps closed, exterior flood-filled, feathered)
-     rather than a rectangle, so it reads as light falling behind the badge
-     instead of a patch laid over the picture.
+     The shadow is the logo's OWN silhouette — the line-art strokes closed up,
+     the exterior flood-filled, then feathered — so it falls in the badge's
+     shape rather than as a rectangle behind it.
      Kept as live DOM rather than baked into the frames so it stays crisp at any
-     DPR and is never cropped by the canvas's object-fit: cover. */
+     DPR and is never cropped by the canvas's object-fit: cover.
+     Note: the frames are untouched footage. This shadow is sized for looks, not
+     to cover the source's burned-in tool marks — those are visible again in
+     this corner on landscape screens (portrait crops them off entirely). */
   .hero-brand {
     position: absolute;
     right: 4vw;
@@ -254,24 +265,36 @@ const copy = {
     height: clamp(84px, 13.5vh, 160px);
     aspect-ratio: 560 / 534;
     pointer-events: none;
-    /* Default: a small shadow, there purely to lift the badge off the picture.
-       object-fit: cover crops the marks off the frame completely on portrait
-       screens, so on those there is nothing to hide and the shadow can stay
-       light. The heavier, mark-covering version is scoped to the aspect ratios
-       that actually expose them — see below. */
-    --glow-spread: 190%;
-    --glow-drop-x: 0%;
-    --glow-drop-y: 8%;
-    --glow-strength: 0.55;
   }
-  .hero-brand-glow {
+
+  /* A real cast shadow rather than a dark patch, so the badge reads as an
+     object sitting above the picture.
+     Two layers, which is what sells the depth: a tight CONTACT shadow hugging
+     the badge (short offset, small spread, the darker of the two) and a wide
+     AMBIENT one falling further away (longer offset, much softer, fainter).
+     A single shadow always looks like a sticker; the pair reads as lit.
+     Both use multiply, so the backdrop is scaled rather than painted over —
+     the shade picks up the grass's warmth or the van's blue by itself instead
+     of going grey-black on top of it. Offsets go down and right throughout,
+     which puts the light up and to the left, matching the footage. */
+  .hero-brand-shadow {
     position: absolute;
     left: 50%;
     top: 50%;
-    width: var(--glow-spread);
     height: auto;
-    transform: translate(calc(-50% + var(--glow-drop-x)), calc(-50% + var(--glow-drop-y)));
-    opacity: var(--glow-strength);
+    /* No will-change here: these layers never animate, and promoting them would
+       only add a compositing layer for the blend to read back through. */
+    mix-blend-mode: multiply;
+  }
+  .hero-brand-shadow--ambient {
+    width: 168%;
+    transform: translate(calc(-50% + 2.5%), calc(-50% + 7%));
+    opacity: 0.5;
+  }
+  .hero-brand-shadow--contact {
+    width: 116%;
+    transform: translate(calc(-50% + 1%), calc(-50% + 3%));
+    opacity: 0.62;
   }
   .hero-brand-mark {
     position: relative; /* above the glow */
@@ -279,22 +302,6 @@ const copy = {
     height: 100%;
     width: auto;
     opacity: 0.95;
-  }
-
-  /* The burned-in marks sit at x>=1580, y>=878 of each 1920x1080 frame — hard
-     against the bottom-right corner. Under object-fit: cover they are only on
-     screen between these two aspect ratios: anything narrower crops the frame's
-     right edge in past them, anything wider crops its bottom edge up past them.
-     (Verified across viewports from 360x780 to 2560x1080.) Only here does the
-     shadow have to do real work, so only here does it spread wide and go fully
-     opaque at the core — measured residual 0.17, against 4.44 with it hidden. */
-  @media (min-aspect-ratio: 287 / 250) and (max-aspect-ratio: 71 / 25) {
-    .hero-brand {
-      --glow-spread: 450%;
-      --glow-drop-x: -2%;
-      --glow-drop-y: 14%;
-      --glow-strength: 1;
-    }
   }
 
   @media (max-width: 640px) {
