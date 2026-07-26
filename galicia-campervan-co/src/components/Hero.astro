@@ -234,20 +234,20 @@ const copy = {
      never cropped away by the canvas's object-fit: cover on narrow screens. */
   .hero-logo {
     position: absolute;
-    right: 2.2vw;
-    bottom: 2.4vh;
-    height: clamp(96px, 19vh, 232px);
+    right: 2vw;
+    bottom: 2.2vh;
+    height: clamp(74px, 12vh, 142px);
     width: auto;
     pointer-events: none;
-    filter: drop-shadow(0 2px 14px rgba(0, 0, 0, 0.55));
-    opacity: 0.96;
+    filter: drop-shadow(0 2px 12px rgba(0, 0, 0, 0.5));
+    opacity: 0.95;
   }
 
   @media (max-width: 640px) {
     .copy-block { bottom: 14vh; }
     /* Smaller on phones so it never crowds the copy */
     .hero-logo {
-      height: clamp(72px, 13vh, 120px);
+      height: clamp(58px, 9vh, 92px);
       right: 4vw;
       bottom: 2vh;
     }
