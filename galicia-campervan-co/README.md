@@ -86,3 +86,40 @@ there (and in `src/pages/index.astro` for the footer) to update it.
 
 See [DEPLOY.md](./DEPLOY.md) — this project auto-deploys via Cloudflare Pages' Git
 integration; pushing to the tracked branch is enough.
+
+## Parked: the burned-in tool marks
+
+The source footage carries "Ltx-2" and a Veo sparkle burned into the bottom-right
+of every frame (union box x>=1580, y>=878 of each 1920x1080 frame). The frames
+currently shipped are untouched, so those marks are visible on landscape screens.
+Portrait screens crop them off for free — under `object-fit: cover` they are only
+on screen between roughly 1.15:1 and 2.84:1.
+
+The badge's shadow is sized for looks, not coverage: measured 1% reduction in
+glyph energy. Ruled out along the way, each with measurements:
+
+- **Translucent shadow/scrim, any size** — 8% transmission of a hard white glyph
+  stays legible. Opacity, not spread, is the binding constraint.
+- **The logo alone** — line art at 46% coverage; it would need to be ~1980px tall
+  (184% of frame height) for its solid areas to span the marks.
+- **ffmpeg `delogo`** — vertical smears, because the box touches the frame edge
+  and can only interpolate from two sides.
+- **Temporal donor patching** — the camera moves 0-170px across 3s while the mark
+  is 340px wide at a *fixed* screen position, so no neighbouring frame ever
+  reveals what is behind it.
+- **Un-compositing** (solving alpha against a clean reference strip) — the alpha
+  map isolates the glyphs cleanly but median R^2 is only ~0.25; inverting darkened
+  the outlines and looked worse.
+
+Three options remain, all previewed and none chosen yet:
+
+1. Leave as is — marks visible on landscape.
+2. **Enamel badge** — fill the badge silhouette opaque so its body covers the
+   marks by geometry. Needs ~31vh height, about 2.4x the current badge.
+3. **Crop from the 4K master** — trim the bottom-right so there is no mark at all.
+   No resolution loss (3840 -> 1920 has headroom), but it clips the van in the
+   closing drone shot and loses the wine glasses in the rear-hatch shot.
+
+A baked defocus DID work (96-99% reduction) and is in the git history around
+`e793b3f`, but was removed because the softened corner was more objectionable
+than the marks.
