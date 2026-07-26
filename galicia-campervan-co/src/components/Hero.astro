@@ -227,11 +227,12 @@ const copy = {
     100% { transform: scaleY(0.3); opacity: 0.3; }
   }
 
-  /* Brand badge, bottom-right. Sits in the softly-defocused corner of the
-     footage (that defocus is baked into the frames — see the frost step in
-     scripts/, which also removes the source footage's burned-in tool marks).
-     Kept as live DOM rather than baked in so it stays crisp at any DPR and is
-     never cropped away by the canvas's object-fit: cover on narrow screens. */
+  /* Brand badge, bottom-right. Kept as live DOM rather than baked into the
+     frames so it stays crisp at any DPR and is never cropped away by the
+     canvas's object-fit: cover on narrow screens.
+     Note: the frames themselves are now the untouched footage — the earlier
+     baked-in defocus that hid the source's burned-in tool marks was removed at
+     the user's request, so those marks are visible in this corner again. */
   .hero-logo {
     position: absolute;
     right: 2vw;
