@@ -14,7 +14,7 @@ const BOOKING_URL = '#';
     </div>
 
     <a
-      class="book-pill"
+      class="book-link"
       href={BOOKING_URL}
       target="_blank"
       rel="noopener noreferrer"
@@ -49,10 +49,10 @@ const BOOKING_URL = '#';
     display: block;
   }
 
-  /* Glass pill matching the toggle's treatment, so the two header elements read
-     as one system. The loud solid-accent button lives in the closing section,
-     where it has the room to be loud. */
-  .book-pill {
+  /* Plain text, no chrome — the toggle is the only object in the header, and a
+     second bordered shape beside it was competing with it. Keeps a 40px tap
+     height without drawing a box. */
+  .book-link {
     justify-self: end;
     display: inline-flex;
     align-items: center;
@@ -60,26 +60,20 @@ const BOOKING_URL = '#';
     font-size: 0.85rem;
     font-weight: 500;
     letter-spacing: 0.02em;
-    color: var(--accent);
+    color: var(--fg);
     white-space: nowrap;
-    padding: 0.55rem 1.25rem;
+    padding: 0.5rem 0;
     min-height: 40px;
-    border-radius: 999px;
-    background: rgba(11, 12, 13, 0.55);
-    border: 1px solid rgba(224, 137, 79, 0.38);
-    backdrop-filter: blur(14px) saturate(160%);
-    -webkit-backdrop-filter: blur(14px) saturate(160%);
-    transition: background 0.25s ease, border-color 0.25s ease, color 0.25s ease;
+    text-shadow: 0 1px 12px rgba(0, 0, 0, 0.55);
+    transition: color 0.25s ease;
   }
-  .book-pill:hover {
-    background: var(--accent);
-    border-color: var(--accent);
-    color: #1a1206;
+  .book-link:hover {
+    color: var(--accent);
   }
   .book-arrow {
     transition: transform 0.25s ease;
   }
-  .book-pill:hover .book-arrow {
+  .book-link:hover .book-arrow {
     transform: translateX(2px);
   }
 
@@ -138,8 +132,7 @@ const BOOKING_URL = '#';
     }
     /* Stays visible here: it is the primary call to action now, and the old
        rule hid it entirely below this width. */
-    .book-pill {
-      padding: 0.5rem 0.95rem;
+    .book-link {
       font-size: 0.8rem;
     }
   }
