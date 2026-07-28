@@ -1,5 +1,5 @@
 ---
-import { timelines } from '../lib/heroTimeline';
+import { timelines, buildTimeline } from '../lib/heroTimeline';
 
 // Build the list of high-res station stills (only for modes that provide them).
 // Each still is the SAME frame the canvas holds on, at full resolution — so it
@@ -34,6 +34,47 @@ const stationLoops = Object.entries(timelines).flatMap(([mode, tl]) =>
       eager: tl.sections[0].id === s.id,
     }))
 );
+
+// Short labels for the station navigator — the copy headlines are far too long
+// to sit in a rail. Keyed the same way as `copy` below.
+const navLabels: Record<string, Record<string, string>> = {
+  hire: {
+    welcome: 'Welcome',
+    exterior: 'The van',
+    amenities: 'Inside',
+    view: 'The view',
+    closing: 'Ready',
+  },
+  build: {
+    welcome: 'Welcome',
+    engineering: 'Engineering',
+    joinery: 'Joinery',
+    finish: 'The finish',
+    closing: 'Ready',
+  },
+};
+
+// Each stop is placed at its TRUE scroll position, not spread evenly down the
+// rail. The stations are not equally spaced in scroll — holds and motions carry
+// different weights — so evenly-spaced marks would sit up to 16px away from
+// where the fill head actually arrives, which on a progress bar reads as broken.
+// buildTimeline is the same function the scrubber uses, so the two cannot drift.
+const navStations = Object.entries(timelines).map(([mode, tl]) => {
+  const ranges = Object.fromEntries(
+    buildTimeline(tl).sectionRanges.map((r) => [r.id, r])
+  );
+  return {
+    mode,
+    items: tl.sections.map((s) => {
+      const r = ranges[s.id];
+      return {
+        id: s.id,
+        label: navLabels[mode]?.[s.id] ?? s.id,
+        at: (((r.start + r.end) / 2) * 100).toFixed(2),
+      };
+    }),
+  };
+});
 
 // Copy is keyed by section id (see src/lib/heroTimeline.ts). Each block fades in
 // while the sequence holds on that section's frame.
@@ -154,6 +195,30 @@ const copy = {
       <span></span>
       Scroll
     </div>
+
+    {/* Station navigator. Left edge by necessity: the brand badge owns the
+        bottom-right and the copy is centred at bottom: 12vh, so this is the only
+        conflict-free region — freed up by dropping the header wordmark. */}
+    <nav class="station-nav" data-station-nav aria-label="Jump to a section">
+      {navStations.map((grp) => (
+        <div class="nav-rail" data-nav-mode={grp.mode}>
+          <span class="nav-rail-line" aria-hidden="true"></span>
+          <span class="nav-rail-fill" aria-hidden="true"></span>
+          {grp.items.map((it) => (
+            <button
+              type="button"
+              class="nav-stop"
+              data-nav-jump={it.id}
+              style={`top:${it.at}%`}
+              aria-label={`Go to ${it.label}`}
+            >
+              <span class="nav-notch" aria-hidden="true"></span>
+              <span class="nav-label">{it.label}</span>
+            </button>
+          ))}
+        </div>
+      ))}
+    </nav>
 
     <div class="hero-brand">
       <img
@@ -311,6 +376,109 @@ const copy = {
     100% { transform: scaleY(0.3); opacity: 0.3; }
   }
 
+  /* ---- Station navigator -------------------------------------------------
+     A single hairline that fills as you scroll, with a mark for each station
+     and only the current station named. Left edge by necessity: the brand badge
+     owns the bottom-right and the copy is centred at bottom: 12vh.
+     Stops are positioned by their real scroll position (see navStations above),
+     so the fill head arrives exactly on a mark as the scrub settles there. */
+  .station-nav {
+    position: absolute;
+    left: clamp(0.9rem, 2.4vw, 2.2rem);
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 12;
+  }
+  .nav-rail {
+    position: relative;
+    width: 2px;
+    height: min(46vh, 380px);
+  }
+  .nav-rail[hidden] { display: none; }
+  .nav-rail-line,
+  .nav-rail-fill {
+    position: absolute;
+    left: 0;
+    width: 100%;
+    border-radius: 2px;
+  }
+  .nav-rail-line {
+    top: 0;
+    bottom: 0;
+    background: rgba(245, 241, 232, 0.18);
+  }
+  .nav-rail-fill {
+    top: 0;
+    height: var(--nav-progress, 0%);
+    background: var(--accent);
+    box-shadow: 0 0 10px rgba(224, 137, 79, 0.45);
+  }
+  .nav-stop {
+    position: absolute;
+    left: 0;
+    transform: translateY(-50%);
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    background: none;
+    border: none;
+    padding: 0.6rem 0.5rem;
+    margin-left: -0.5rem;
+    cursor: pointer;
+    font: inherit;
+    color: var(--fg);
+    -webkit-tap-highlight-color: transparent;
+  }
+  .nav-notch {
+    flex: none;
+    width: 7px;
+    height: 2px;
+    border-radius: 2px;
+    background: var(--fg);
+    opacity: 0.4;
+    transition: width 0.3s cubic-bezier(0.2, 0.7, 0.2, 1), opacity 0.3s ease, background 0.3s ease;
+  }
+  .nav-label {
+    font-size: 0.66rem;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    white-space: nowrap;
+    opacity: 0;
+    transform: translateX(-4px);
+    transition: opacity 0.3s ease, transform 0.3s ease;
+    text-shadow: 0 1px 10px rgba(0, 0, 0, 0.75);
+  }
+  .nav-stop.is-active .nav-notch {
+    width: 15px;
+    opacity: 1;
+    background: var(--accent);
+  }
+  .nav-stop.is-active .nav-label {
+    opacity: 0.95;
+    transform: none;
+  }
+  .nav-stop:hover .nav-label {
+    opacity: 0.65;
+    transform: none;
+  }
+
+  /* Touch: marks only, and stops that clear 44px without overlapping. */
+  @media (max-width: 640px) {
+    .station-nav { left: 0.75rem; }
+    .nav-rail { height: min(38vh, 300px); }
+    .nav-stop {
+      padding: 0.8rem 0.7rem;
+      margin-left: -0.7rem;
+      min-width: 44px;
+      min-height: 44px;
+    }
+    .nav-label { display: none; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .nav-notch, .nav-label, .nav-rail-fill { transition: none; }
+  }
+
   /* Brand badge, bottom-right, sitting in its own soft shadow.
      The shadow is the logo's OWN silhouette — the line-art strokes closed up,
      the exterior flood-filled, then feathered — so it falls in the badge's
@@ -407,7 +575,14 @@ const copy = {
     const blocks = Array.from(document.querySelectorAll<HTMLElement>('.copy-block'));
     const stills = Array.from(document.querySelectorAll<HTMLElement>('.station-still'));
     let loops = Array.from(document.querySelectorAll<HTMLVideoElement>('.station-loop'));
+    const nav = document.querySelector<HTMLElement>('[data-station-nav]');
+    const navRails = Array.from(document.querySelectorAll<HTMLElement>('.nav-rail'));
+    // Declared up here, not beside the click handler: onProgress fires from
+    // inside createScrollScrubber below, so anything it touches has to be
+    // initialised before that call rather than after it.
+    let latestRanges: Record<string, SectionRange> = {};
     if (!canvas || !track) return;
+
 
     // The loops are decoration. Drop them entirely when the visitor has asked
     // for less motion, or when the browser reports a metered or slow connection
@@ -454,6 +629,8 @@ const copy = {
         if (scrollCue) scrollCue.style.opacity = progress > 0.02 ? '0' : '1';
         const rangeById: Record<string, SectionRange> = {};
         for (const r of ranges) rangeById[r.id] = r;
+        latestRanges = rangeById;
+        updateNav(progress, mode, rangeById);
 
         for (const block of blocks) {
           if (block.dataset.copyMode !== mode) {
@@ -497,6 +674,45 @@ const copy = {
         }
       },
     });
+
+    if (nav) {
+      // Jumping the page is allowed HERE and nowhere else. What was removed from
+      // this component was the page moving on the user's behalf after a gesture;
+      // a jump in direct response to a click is the user asking to be moved.
+      nav.addEventListener('click', (e) => {
+        const btn = (e.target as HTMLElement).closest<HTMLElement>('[data-nav-jump]');
+        if (!btn) return;
+        const r = latestRanges[btn.dataset.navJump!];
+        if (!r) return;
+        const scrollable = track!.getBoundingClientRect().height - window.innerHeight;
+        if (scrollable <= 0) return;
+        const centre = (r.start + r.end) / 2;
+        const top = Math.round(track!.offsetTop + centre * scrollable);
+        const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        window.scrollTo({ top, behavior: reduced ? 'auto' : 'smooth' });
+      });
+    }
+
+    function updateNav(progress: number, mode: string, rangeById: Record<string, SectionRange>) {
+      if (!nav) return;
+      // The fill is raw scroll progress, and each stop is pinned to its own true
+      // position, so the head reaches a mark exactly as the scrub settles there.
+      nav.style.setProperty('--nav-progress', `${(progress * 100).toFixed(2)}%`);
+      for (const rail of navRails) {
+        const isMode = rail.dataset.navMode === mode;
+        rail.hidden = !isMode;
+        if (!isMode) continue;
+        for (const stop of Array.from(rail.querySelectorAll<HTMLElement>('.nav-stop'))) {
+          const r = rangeById[stop.dataset.navJump!];
+          // Active only while the scrub is genuinely resting on that station.
+          // Mid-motion nothing lights up: snapping the marker to the nearest
+          // station would claim the user is somewhere they are not.
+          const active = !!r && progress >= r.start - EPS && progress <= r.end + EPS;
+          stop.classList.toggle('is-active', active);
+          stop.setAttribute('aria-current', active ? 'true' : 'false');
+        }
+      }
+    }
 
     // play()/pause() are async and interrupt each other if called while one is
     // still settling, so gate on our own intent rather than on v.paused.

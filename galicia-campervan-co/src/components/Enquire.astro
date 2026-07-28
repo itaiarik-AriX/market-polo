@@ -1,13 +1,26 @@
 ---
 const EMAIL = 'itaiarik@gmail.com';
+// Booking happens on a third-party site. Placeholder until the real link
+// arrives — swapping it is a one-line change here and one in Header.astro.
+const BOOKING_URL = '#';
 ---
 <section class="enquire" id="enquire">
   <div class="enquire-inner">
     <p class="eyebrow" data-enquire-eyebrow>— Enquire</p>
 
     <div data-enquire-panel="hire">
-      <h2 class="serif">Request your dates.</h2>
-      <p class="lede">No booking engine, no card details — tell us when and we'll write back personally, usually the same day.</p>
+      <h2 class="serif">Ready when you are.</h2>
+      <p class="lede">Live dates and instant booking, handled by our booking partner.</p>
+
+      <a
+        class="book-cta"
+        href={BOOKING_URL}
+        target="_blank"
+        rel="noopener noreferrer"
+      >Check availability <span aria-hidden="true">&rarr;</span></a>
+
+      <div class="or-rule"><span>Rather ask us first?</span></div>
+
       <form class="enquiry-form" data-enquiry-form="hire">
         <div class="field-row">
           <label>
@@ -27,7 +40,7 @@ const EMAIL = 'itaiarik@gmail.com';
           Anything we should know? <span class="optional">(optional)</span>
           <textarea name="notes" rows="3" placeholder="Where you're dreaming of going, how many of you…"></textarea>
         </label>
-        <button type="submit" class="submit-btn">Send enquiry &rarr;</button>
+        <button type="submit" class="submit-btn is-secondary">Send enquiry &rarr;</button>
       </form>
     </div>
 
@@ -117,6 +130,43 @@ const EMAIL = 'itaiarik@gmail.com';
     outline: none;
     border-color: var(--accent);
   }
+  /* Booking is the one loud action on the page. */
+  .book-cta {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    background: var(--accent);
+    color: #1a1206;
+    border-radius: 999px;
+    font-weight: 500;
+    font-size: 1.05rem;
+    padding: 1rem 2.4rem;
+    min-height: 52px;
+    transition: background 0.25s ease, transform 0.25s ease;
+  }
+  .book-cta:hover {
+    background: var(--accent-deep);
+    transform: translateY(-1px);
+  }
+
+  /* Divider that demotes what follows without hiding it. */
+  .or-rule {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin: 3rem 0 2rem;
+    color: var(--fg-dim);
+    font-size: 0.82rem;
+    letter-spacing: 0.04em;
+  }
+  .or-rule::before,
+  .or-rule::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--rule);
+  }
+
   .submit-btn {
     margin-top: 0.5rem;
     align-self: center;
@@ -130,11 +180,23 @@ const EMAIL = 'itaiarik@gmail.com';
     padding: 0.9rem 2.2rem;
     min-height: 48px;
     cursor: pointer;
-    transition: background 0.25s ease, transform 0.25s ease;
+    transition: background 0.25s ease, border-color 0.25s ease, color 0.25s ease, transform 0.25s ease;
   }
   .submit-btn:hover {
     background: var(--accent-deep);
     transform: translateY(-1px);
+  }
+  /* Outlined, so it reads as the quieter of the two paths. Build keeps the
+     solid version, since there the form IS the primary action. */
+  .submit-btn.is-secondary {
+    background: transparent;
+    color: var(--fg);
+    border: 1px solid var(--rule-strong);
+  }
+  .submit-btn.is-secondary:hover {
+    background: transparent;
+    border-color: var(--accent);
+    color: var(--accent);
   }
 
   @media (max-width: 640px) {
