@@ -3,6 +3,68 @@ const EMAIL = 'itaiarik@gmail.com';
 // Booking happens on a third-party site. Placeholder until the real link
 // arrives — swapping it is a one-line change here and one in Header.astro.
 const BOOKING_URL = '#';
+
+// Language-specific content for the enquire section
+const content = {
+  en: {
+    eyebrow: '— Enquire',
+    hire: {
+      title: 'Ready when you are.',
+      subtitle: 'Live dates and instant booking, handled by our booking partner.',
+      cta: 'Check availability',
+      divider: 'Rather ask us first?',
+      submit: 'Send enquiry',
+      labels: {
+        from: 'From',
+        to: 'To',
+        name: 'Your name',
+        notes: 'Anything we should know?',
+        placeholder_notes: "Where you're dreaming of going, how many of you…",
+      },
+    },
+    build: {
+      title: 'Tell us about your build.',
+      subtitle: "Whether it's a bare van or a tired camper that needs a new life — start the conversation and we'll reply personally.",
+      labels: {
+        name: 'Your name',
+        base: 'What are you starting with?',
+        placeholder_base: 'e.g. a 2019 Transporter, an old T2 that needs love…',
+        notes: 'What do you have in mind?',
+        placeholder_notes: 'Full conversion, renovation, something in between…',
+      },
+      submit: 'Start the conversation',
+    },
+  },
+  es: {
+    eyebrow: '— Enquire',
+    hire: {
+      title: 'Ready when you are.',
+      subtitle: 'Live dates and instant booking, handled by our booking partner.',
+      cta: 'Check availability',
+      divider: 'Rather ask us first?',
+      submit: 'Send enquiry',
+      labels: {
+        from: 'From',
+        to: 'To',
+        name: 'Your name',
+        notes: 'Anything we should know?',
+        placeholder_notes: "Where you're dreaming of going, how many of you…",
+      },
+    },
+    build: {
+      title: 'Tell us about your build.',
+      subtitle: "Whether it's a bare van or a tired camper that needs a new life — start the conversation and we'll reply personally.",
+      labels: {
+        name: 'Your name',
+        base: 'What are you starting with?',
+        placeholder_base: 'e.g. a 2019 Transporter, an old T2 that needs love…',
+        notes: 'What do you have in mind?',
+        placeholder_notes: 'Full conversion, renovation, something in between…',
+      },
+      submit: 'Start the conversation',
+    },
+  },
+};
 ---
 <section class="enquire" id="enquire">
   <div class="enquire-inner">
@@ -212,6 +274,47 @@ const BOOKING_URL = '#';
 <script define:vars={{ EMAIL }}>
   // Compose a pre-filled mailto enquiry — no backend needed.
   function initEnquiry() {
+    let currentLang = localStorage.getItem('lang') || 'en';
+
+    const emailStrings = {
+      en: {
+        hire: {
+          subject: 'Hire enquiry',
+          greeting: 'Hi Coruña Campervan,',
+          intro: "I'd like to enquire about hiring the campervan.",
+          dates: 'Dates',
+          name: 'Name',
+          more: 'A bit more about the trip',
+        },
+        build: {
+          subject: 'Build enquiry',
+          greeting: 'Hi Coruña Campervan,',
+          intro: "I'd like to talk about a build.",
+          name: 'Name',
+          base: 'Starting point',
+          more: 'What I have in mind',
+        },
+      },
+      es: {
+        hire: {
+          subject: 'Hire enquiry',
+          greeting: 'Hi Coruña Campervan,',
+          intro: "I'd like to enquire about hiring the campervan.",
+          dates: 'Dates',
+          name: 'Name',
+          more: 'A bit more about the trip',
+        },
+        build: {
+          subject: 'Build enquiry',
+          greeting: 'Hi Coruña Campervan,',
+          intro: "I'd like to talk about a build.",
+          name: 'Name',
+          base: 'Starting point',
+          more: 'What I have in mind',
+        },
+      },
+    };
+
     document.addEventListener('mode-change', (e) => {
       const { mode } = e.detail;
       document.querySelectorAll('[data-enquire-panel]').forEach((panel) => {
@@ -219,33 +322,39 @@ const BOOKING_URL = '#';
       });
     });
 
+    document.addEventListener('language-change', (e) => {
+      const { lang } = e.detail;
+      currentLang = lang;
+    });
+
     document.querySelectorAll('[data-enquiry-form]').forEach((form) => {
       form.addEventListener('submit', (e) => {
         e.preventDefault();
         const mode = form.dataset.enquiryForm;
         const data = new FormData(form);
+        const strings = emailStrings[currentLang] || emailStrings.en;
         let subject, lines;
         if (mode === 'hire') {
-          subject = `Hire enquiry — ${data.get('from')} to ${data.get('to')}`;
+          subject = `${strings.hire.subject} — ${data.get('from')} to ${data.get('to')}`;
           lines = [
-            `Hi Coruña Campervan,`,
-            ``,
-            `I'd like to enquire about hiring the campervan.`,
-            ``,
-            `Dates: ${data.get('from')} → ${data.get('to')}`,
-            `Name: ${data.get('name')}`,
-            data.get('notes') ? `\nA bit more about the trip:\n${data.get('notes')}` : '',
+            strings.hire.greeting,
+            '',
+            strings.hire.intro,
+            '',
+            `${strings.hire.dates}: ${data.get('from')} → ${data.get('to')}`,
+            `${strings.hire.name}: ${data.get('name')}`,
+            data.get('notes') ? `\n${strings.hire.more}:\n${data.get('notes')}` : '',
           ];
         } else {
-          subject = `Build enquiry from ${data.get('name')}`;
+          subject = `${strings.build.subject} from ${data.get('name')}`;
           lines = [
-            `Hi Coruña Campervan,`,
-            ``,
-            `I'd like to talk about a build.`,
-            ``,
-            `Name: ${data.get('name')}`,
-            `Starting point: ${data.get('base')}`,
-            data.get('notes') ? `\nWhat I have in mind:\n${data.get('notes')}` : '',
+            strings.build.greeting,
+            '',
+            strings.build.intro,
+            '',
+            `${strings.build.name}: ${data.get('name')}`,
+            `${strings.build.base}: ${data.get('base')}`,
+            data.get('notes') ? `\n${strings.build.more}:\n${data.get('notes')}` : '',
           ];
         }
         const href = `mailto:${EMAIL}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(lines.join('\n'))}`;

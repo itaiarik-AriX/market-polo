@@ -76,61 +76,119 @@ const navStations = Object.entries(timelines).map(([mode, tl]) => {
   };
 });
 
-// Copy is keyed by section id (see src/lib/heroTimeline.ts). Each block fades in
-// while the sequence holds on that section's frame.
+// Copy is keyed by language, then mode, then section id (see src/lib/heroTimeline.ts).
+// Each block fades in while the sequence holds on that section’s frame.
 const copy = {
-  hire: {
-    welcome: {
-      eyebrow: 'Coruña Campervan',
-      title: 'Wake up somewhere the map forgot.',
-      body: 'A classic camper, the open coast, and nowhere you have to be.',
+  en: {
+    hire: {
+      welcome: {
+        eyebrow: ‘Coruña Campervan’,
+        title: ‘Wake up somewhere the map forgot.’,
+        body: ‘A classic camper, the open coast, and nowhere you have to be.’,
+      },
+      exterior: {
+        eyebrow: ‘The van’,
+        title: ‘A classic, through and through.’,
+        body: ‘Restored, road-ready, and unmistakably retro — inside and out.’,
+      },
+      amenities: {
+        eyebrow: ‘What’s inside’,
+        title: ‘Everything you need for the road.’,
+        body: ‘A proper bed, a hot side shower, and a full kitchen — all in reach.’,
+      },
+      view: {
+        eyebrow: ‘Pull over anywhere’,
+        title: ‘Wherever you stop, that’s the view.’,
+        body: ‘No campsite required — just a spot you like the look of.’,
+      },
+      closing: {
+        eyebrow: ‘Ready?’,
+        title: ‘Ready to hit the road?’,
+        body: ‘Tell us your dates below — we’ll write back personally.’,
+      },
     },
-    exterior: {
-      eyebrow: 'The van',
-      title: 'A classic, through and through.',
-      body: 'Restored, road-ready, and unmistakably retro — inside and out.',
-    },
-    amenities: {
-      eyebrow: 'What’s inside',
-      title: 'Everything you need for the road.',
-      body: 'A proper bed, a hot side shower, and a full kitchen — all in reach.',
-    },
-    view: {
-      eyebrow: 'Pull over anywhere',
-      title: 'Wherever you stop, that’s the view.',
-      body: 'No campsite required — just a spot you like the look of.',
-    },
-    closing: {
-      eyebrow: 'Ready?',
-      title: 'Ready to hit the road?',
-      body: 'Tell us your dates below — we’ll write back personally.',
+    build: {
+      welcome: {
+        eyebrow: ‘Coruña Campervan’,
+        title: ‘Every camper starts as steel and imagination.’,
+        body: ‘This is where your build begins.’,
+      },
+      engineering: {
+        eyebrow: ‘Engineering’,
+        title: ‘Engineered underneath.’,
+        body: ‘Insulation, electrics and systems done properly — so nothing lets you down.’,
+      },
+      joinery: {
+        eyebrow: ‘Craftsmanship’,
+        title: ‘Bespoke joinery, built by hand.’,
+        body: ‘Every cabinet fitted to your van, not a generic kit.’,
+      },
+      finish: {
+        eyebrow: ‘The finish’,
+        title: ‘Finished to live in, not just to look at.’,
+        body: ‘A complete build, ready for the road.’,
+      },
+      closing: {
+        eyebrow: ‘Ready?’,
+        title: ‘Ready to build yours?’,
+        body: ‘Tell us what you have in mind below.’,
+      },
     },
   },
-  build: {
-    welcome: {
-      eyebrow: 'Coruña Campervan',
-      title: 'Every camper starts as steel and imagination.',
-      body: 'This is where your build begins.',
+  es: {
+    hire: {
+      welcome: {
+        eyebrow: ‘Coruña Campervan’,
+        title: ‘Wake up somewhere the map forgot.’,
+        body: ‘A classic camper, the open coast, and nowhere you have to be.’,
+      },
+      exterior: {
+        eyebrow: ‘The van’,
+        title: ‘A classic, through and through.’,
+        body: ‘Restored, road-ready, and unmistakably retro — inside and out.’,
+      },
+      amenities: {
+        eyebrow: ‘What’s inside’,
+        title: ‘Everything you need for the road.’,
+        body: ‘A proper bed, a hot side shower, and a full kitchen — all in reach.’,
+      },
+      view: {
+        eyebrow: ‘Pull over anywhere’,
+        title: ‘Wherever you stop, that’s the view.’,
+        body: ‘No campsite required — just a spot you like the look of.’,
+      },
+      closing: {
+        eyebrow: ‘Ready?’,
+        title: ‘Ready to hit the road?’,
+        body: ‘Tell us your dates below — we’ll write back personally.’,
+      },
     },
-    engineering: {
-      eyebrow: 'Engineering',
-      title: 'Engineered underneath.',
-      body: 'Insulation, electrics and systems done properly — so nothing lets you down.',
-    },
-    joinery: {
-      eyebrow: 'Craftsmanship',
-      title: 'Bespoke joinery, built by hand.',
-      body: 'Every cabinet fitted to your van, not a generic kit.',
-    },
-    finish: {
-      eyebrow: 'The finish',
-      title: 'Finished to live in, not just to look at.',
-      body: 'A complete build, ready for the road.',
-    },
-    closing: {
-      eyebrow: 'Ready?',
-      title: 'Ready to build yours?',
-      body: 'Tell us what you have in mind below.',
+    build: {
+      welcome: {
+        eyebrow: ‘Coruña Campervan’,
+        title: ‘Every camper starts as steel and imagination.’,
+        body: ‘This is where your build begins.’,
+      },
+      engineering: {
+        eyebrow: ‘Engineering’,
+        title: ‘Engineered underneath.’,
+        body: ‘Insulation, electrics and systems done properly — so nothing lets you down.’,
+      },
+      joinery: {
+        eyebrow: ‘Craftsmanship’,
+        title: ‘Bespoke joinery, built by hand.’,
+        body: ‘Every cabinet fitted to your van, not a generic kit.’,
+      },
+      finish: {
+        eyebrow: ‘The finish’,
+        title: ‘Finished to live in, not just to look at.’,
+        body: ‘A complete build, ready for the road.’,
+      },
+      closing: {
+        eyebrow: ‘Ready?’,
+        title: ‘Ready to build yours?’,
+        body: ‘Tell us what you have in mind below.’,
+      },
     },
   },
 };
@@ -180,13 +238,15 @@ const copy = {
     <div class="hero-vignette" aria-hidden="true"></div>
 
     <div class="hero-copy">
-      {Object.entries(copy).map(([mode, sections]) => (
-        Object.entries(sections).map(([id, block]) => (
-          <div class="copy-block" data-copy-mode={mode} data-copy-id={id}>
-            <p class="eyebrow">{block.eyebrow}</p>
-            <h2 class="serif copy-title">{block.title}</h2>
-            <p class="copy-body">{block.body}</p>
-          </div>
+      {Object.entries(copy).map(([lang, modes]) => (
+        Object.entries(modes).map(([mode, sections]) => (
+          Object.entries(sections).map(([id, block]) => (
+            <div class="copy-block" data-copy-lang={lang} data-copy-mode={mode} data-copy-id={id}>
+              <p class="eyebrow">{block.eyebrow}</p>
+              <h2 class="serif copy-title">{block.title}</h2>
+              <p class="copy-body">{block.body}</p>
+            </div>
+          ))
         ))
       ))}
     </div>
@@ -570,6 +630,7 @@ const copy = {
     // inside createScrollScrubber below, so anything it touches has to be
     // initialised before that call rather than after it.
     let latestRanges: Record<string, SectionRange> = {};
+    let currentLang = localStorage.getItem('lang') || 'en';
     if (!canvas || !track) return;
 
 
@@ -622,7 +683,7 @@ const copy = {
         updateNav(progress, mode, rangeById);
 
         for (const block of blocks) {
-          if (block.dataset.copyMode !== mode) {
+          if (block.dataset.copyLang !== currentLang || block.dataset.copyMode !== mode) {
             block.style.opacity = '0';
             continue;
           }
@@ -721,6 +782,17 @@ const copy = {
     document.addEventListener('mode-change', (e: Event) => {
       const { mode } = (e as CustomEvent).detail;
       scrubber.setMode(mode);
+    });
+
+    document.addEventListener('language-change', (e: Event) => {
+      const { lang } = (e as CustomEvent).detail;
+      currentLang = lang;
+      // Re-render copy blocks with the new language by updating visibility
+      for (const block of blocks) {
+        if (block.dataset.copyLang !== currentLang) {
+          block.style.opacity = '0';
+        }
+      }
     });
 
     // NOTE: there is deliberately NO scroll manipulation here — no magnetic
