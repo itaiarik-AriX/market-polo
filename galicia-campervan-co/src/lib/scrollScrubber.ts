@@ -39,6 +39,22 @@ export function tierFor(tl: ModeTimeline): string {
 // reorder — which is what made the very first version's opening seconds rough.
 const MAX_IN_FLIGHT = 8;
 
+// Only frames this close to where the user is get decoded up front. Wide enough
+// to cover the stretch a gesture can cross before the decode lands, narrow
+// enough that we are not decoding the whole timeline speculatively.
+const DECODE_WINDOW = 24;
+
+// How long after the last scroll event the loader treats the user as still
+// moving. Fetching and decoding images competes with scrolling for the main
+// thread — on a throttled phone profile the browser's own work (decode, raster)
+// was 92% of the time during a scrub, against ~0.5% for all our JavaScript. So
+// the win is not in our code, it is in not asking the browser to do that work
+// while a gesture is in flight.
+const LOADER_QUIET_MS = 180;
+
+/** Concurrency while a gesture is in flight. */
+const MOVING_IN_FLIGHT = 2;
+
 function frameSrc(tl: ModeTimeline, index: number): string {
   const n = String(index + 1).padStart(tl.pad, '0');
   const base = tierFor(tl);
@@ -74,6 +90,8 @@ export function createScrollScrubber(opts: ScrollScrubberOptions) {
   let progress = 0;
   let dpr = Math.min(window.devicePixelRatio || 1, 2);
   let loadToken = 0; // invalidates an in-progress load when the mode changes
+  let lastScrollAt = 0; // when the user last moved, for the loader's back-off
+  let resumeTimer = 0;
 
   function resizeCanvas() {
     dpr = Math.min(window.devicePixelRatio || 1, 2);
@@ -152,7 +170,18 @@ export function createScrollScrubber(opts: ScrollScrubberOptions) {
 
     function pump() {
       if (myToken !== loadToken) return; // a mode switch superseded this load
-      while (inFlight < MAX_IN_FLIGHT) {
+      // Throttle while the user is actively moving, rather than stopping: this
+      // page is scrolled almost continuously, so a hard halt could starve the
+      // loader for as long as the gesture lasts. Dropping to a trickle keeps
+      // frames arriving while leaving the main thread to the scroll.
+      const since = performance.now() - lastScrollAt;
+      const moving = since < LOADER_QUIET_MS;
+      const limit = moving ? MOVING_IN_FLIGHT : MAX_IN_FLIGHT;
+      if (moving) {
+        clearTimeout(resumeTimer);
+        resumeTimer = window.setTimeout(pump, LOADER_QUIET_MS - since + 10);
+      }
+      while (inFlight < limit) {
         const i = pickNext();
         if (i < 0) break;
         queued[i] = true;
@@ -164,7 +193,24 @@ export function createScrollScrubber(opts: ScrollScrubberOptions) {
           inFlight--;
           pump();
         };
-        img.onload = () => {
+        img.onload = async () => {
+          if (myToken !== loadToken) return;
+          // Decode BEFORE marking the frame usable: `onload` only means the
+          // bytes arrived, and the first drawImage of an undecoded image
+          // decodes it synchronously on the main thread, mid-scroll.
+          //
+          // Only for frames near where the user actually is, though. Decoding
+          // every frame on arrival costs more total work than it saves —
+          // profiling showed it pushing long-task time from 6.5s to 10.6s by
+          // decoding hundreds of frames that are never drawn.
+          if (Math.abs(i - desiredFrame) <= DECODE_WINDOW) {
+            try {
+              await img.decode();
+            } catch {
+              // Rejects if the element is detached or the src changed; the
+              // frame is still drawable, so fall through and mark it loaded.
+            }
+          }
           if (myToken !== loadToken) return;
           loaded[i] = true;
           loadedCount++;
@@ -222,6 +268,7 @@ export function createScrollScrubber(opts: ScrollScrubberOptions) {
 
   let ticking = false;
   function onScroll() {
+    lastScrollAt = performance.now();
     if (ticking) return;
     ticking = true;
     requestAnimationFrame(() => {

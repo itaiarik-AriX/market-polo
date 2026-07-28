@@ -25,7 +25,8 @@ STILL_OUT = 'public/sequences/hire-stations-portrait'
 
 MASTER_W, MASTER_H = 3840, 2160
 CROP_W = 1215                      # 9:16 window out of a 3840x2160 frame
-OUT_W, OUT_H = 1080, 1920
+OUT_W = int(__import__('os').environ.get('OUT_W', 1080))
+OUT_H = OUT_W * 16 // 9
 FPS = 12
 QUALITY = 82                       # matches the existing mobile tier; ~23MB total
 STILL_QUALITY = 92

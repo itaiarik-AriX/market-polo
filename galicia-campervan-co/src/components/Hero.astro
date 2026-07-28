@@ -655,11 +655,25 @@ const copy = {
     const conn = (navigator as any).connection;
     const ambientWanted =
       !window.matchMedia('(prefers-reduced-motion: reduce)').matches &&
-      // The loops are 16:9. On a portrait phone the frames and stills are the
-      // 9:16 recut, so a loop would fade in at a visibly different framing —
-      // drop them there and let the sharp portrait still carry the station.
-      !window.matchMedia('(max-width: 820px) and (orientation: portrait)').matches &&
       !(conn && (conn.saveData || /(^|\W)(slow-)?2g$/.test(conn.effectiveType ?? '')));
+
+    // Portrait phones get the 9:16 recut of each loop, cut at the same pan
+    // centre as the frames and stills so all three are framed identically.
+    // Done in script rather than <source media>, which Chrome dropped support
+    // for on <video> — only <picture> honours it, which is why the stills can
+    // use markup for this and the loops cannot.
+    if (
+      ambientWanted &&
+      window.matchMedia('(max-width: 820px) and (orientation: portrait)').matches
+    ) {
+      for (const v of loops) {
+        for (const s of Array.from(v.querySelectorAll('source'))) {
+          s.src = s.src.replace(/\.(mp4|webm)$/, '-portrait.$1');
+        }
+        v.poster = v.poster.replace('/hire-stations/', '/hire-stations-portrait/');
+        v.load();
+      }
+    }
     if (!ambientWanted) {
       for (const v of loops) v.remove();
       loops = [];

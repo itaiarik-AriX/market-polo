@@ -63,6 +63,8 @@ import { BOOKING_URL } from '../lib/site';
   }
 
   .lang-btn {
+    display: inline-flex;
+    align-items: center;
     border: none;
     background: transparent;
     color: var(--fg-dim);
@@ -77,12 +79,11 @@ import { BOOKING_URL } from '../lib/site';
 
   .lang-btn:first-child::after {
     content: '';
-    display: inline-block;
+    display: block;
     width: 1px;
-    height: 14px;
+    height: 11px;
     background: rgba(245, 241, 232, 0.2);
     margin-left: 0.5rem;
-    vertical-align: middle;
   }
 
   .lang-btn[aria-selected='true'] {
@@ -192,10 +193,16 @@ import { BOOKING_URL } from '../lib/site';
       padding: 1rem;
       gap: 0.5rem;
     }
-    .mode-btn,
-    .lang-btn {
+    .mode-btn {
       padding: 0.55rem 1rem;
       font-size: 0.8rem;
+    }
+    /* Deliberately NOT sharing the mode toggle's padding: it is sized for a
+       pill with a background, and on a bare text control it just pushes EN and
+       ES apart. Keep the pair tight and let the row's own padding do the work. */
+    .lang-btn {
+      padding: 0.5rem 0;
+      font-size: 0.75rem;
     }
     /* Stays visible here: it is the primary call to action now, and the old
        rule hid it entirely below this width. */
