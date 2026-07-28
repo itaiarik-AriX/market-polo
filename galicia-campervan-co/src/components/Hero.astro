@@ -424,16 +424,22 @@ const copy = {
     // Fade a section's copy/still in over the first slice of its hold and out over the last.
     const EDGE = 0.28; // fraction of each hold used for the fade in/out
 
+    const EPS = 1e-6;
+
     function opacityForRange(p: number, start: number, end: number): number {
-      if (p < start || p > end) return 0;
+      // Tolerant bounds: the ranges are built by accumulating fractions, so the
+      // last one ends at 0.9999999999999999 rather than 1. Without the epsilon,
+      // progress of exactly 1 falls outside it and the closing station blanks
+      // at the very bottom of the track.
+      if (p < start - EPS || p > end + EPS) return 0;
       const span = end - start;
       const edge = span * EDGE;
       // A hold pinned to either end of the timeline has nothing to fade from or
       // to: progress 0 is where the page loads and 1 is where it ends. Ramping
       // there would leave the first station's copy — and its ambient loop —
       // invisible on arrival, appearing only once the visitor starts scrolling.
-      const atStart = start <= 1e-6;
-      const atEnd = end >= 1 - 1e-6;
+      const atStart = start <= EPS;
+      const atEnd = end >= 1 - EPS;
       if (!atStart && p < start + edge) return (p - start) / edge;
       if (!atEnd && p > end - edge) return (end - p) / edge;
       return 1;

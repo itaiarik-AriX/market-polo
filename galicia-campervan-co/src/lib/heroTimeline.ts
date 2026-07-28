@@ -68,7 +68,7 @@ export const timelines: Record<string, ModeTimeline> = {
       { id: 'exterior', frame: 81, hold: 1.2, motion: 2.4 },
       { id: 'amenities', frame: 227, hold: 1.2, motion: 3.0 },
       { id: 'view', frame: 362, hold: 1.2, motion: 2.8 },
-      { id: 'closing', frame: 456, hold: 1.6, motion: 2.0 },
+      { id: 'closing', frame: 456, hold: 1.6, motion: 2.0, loop: '/loops/closing' },
     ],
   },
   // Build mode still uses placeholder frames for now; evenly-spaced holds.

@@ -6,17 +6,21 @@ Reads docs/station-clips/<n>-<id>-raw.mp4, writes public/loops/<id>.{mp4,webm}.
 
 What the generator handed back needed four corrections, in this order:
 
-  1. GEOMETRY. It returned a ~7% wider view than the plate we gave it, and the
-     camera drifted ~10px left over the clip. Both are undone in a single affine
-     resample so the image is only interpolated once. Getting this right is what
-     lets the loop hand over invisibly: the clip's first frame has to be the
-     frame the canvas holds on, or the scrub pops when the loop fades out.
+  1. GEOMETRY (and grade). Every clip so far came back re-framed — welcome ~7%
+     wider, closing ~2% — and welcome's camera also drifted ~10px left. Both are
+     undone in a single affine resample so the image is only interpolated once.
+     Getting this right is what lets the loop hand over invisibly: the clip's
+     first frame has to be the frame the canvas holds on, or the scrub pops when
+     the loop fades out. Some clips also come back re-graded (closing was ~14%
+     more contrasty), which needs matching for the same reason.
 
-  2. THE GENERATOR'S OWN WATERMARK. Veo burns a wordmark and a sparkle into the
-     bottom-right. The wordmark falls outside the corrected framing and is simply
-     cropped away; the sparkle is removed by diffusion infill, the same method
+  2. THE GENERATOR'S OWN WATERMARK. Veo burns a sparkle into the bottom-right,
+     and sometimes a wordmark too. A large framing correction can crop the
+     wordmark away; the sparkle is removed by diffusion infill, the same method
      used for the input plates — it extrapolates the surrounding light inward
-     rather than importing texture from elsewhere in the frame.
+     rather than importing texture from elsewhere in the frame. Measure its box
+     on the CORRECTED frames: mapping coordinates through the transform put the
+     box 8px inside the sparkle's tip on closing, and it leaked.
 
   3. THE PEOPLE. Structured human motion is what makes a loop's repeat legible:
      the eye learns a gesture's arc and recognises the replay. Grass and water
@@ -52,14 +56,42 @@ STATIONS = {
         # plate(x, y) = clip((x + off_x) / scale, (y + off_y) / scale)
         'scale': 1.070, 'off_x': 42.0, 'off_y': 24.0,
         'sparkle': (1168, 586, 1230, 648),
+        'donor_dy': 60,
         'freeze': (572, 374, 732, 478),   # the couple, as an ellipse
+        # Channel means already landed within 0.6/255 of the plate here, and
+        # forcing a match made it worse. Left alone.
+        'colour_match': False,
+    },
+    'closing': {
+        'raw': 'docs/station-clips/5-closing-raw.mp4',
+        'plate': 'docs/station-plates/5-closing.png',
+        'scale': 1.020, 'off_x': 12.0, 'off_y': 8.0,
+        # Measured on the GEOMETRY-CORRECTED frames, not mapped through the
+        # transform from the raw ones — mapping put the box 8px inside the
+        # sparkle's left tip and it leaked.
+        'sparkle': (1144, 574, 1202, 631),
+        'donor_dy': 0,    # borrowed texture read worse than a clean soft patch here
+        'freeze': (776, 484, 897, 578),
+        # This one came back graded warmer and ~14% more contrasty than the
+        # plate (per-channel std 71/47/41 against 63/40/36). Left uncorrected
+        # the grade would visibly shift as the loop fades into the scrub.
+        'colour_match': True,
     },
 }
 
 FPS = 24
 
 
-def infill(arr, box, iters=400):
+def infill(arr, box, donor_dy=0, iters=400):
+    """Diffusion infill, optionally re-textured.
+
+    Diffusion alone produces a smooth patch, which against grass reads as a
+    smudge — more conspicuous than the mark it replaced. So where a donor offset
+    is given, the low frequencies come from the diffusion (correct local
+    lighting, no imported structure) and the high frequencies are borrowed from
+    a patch of real grass elsewhere in the same frame. The result carries the
+    surrounding texture without copying anything recognisable.
+    """
     x0, y0, x1, y1 = box
     work = arr.copy()
     seed = np.concatenate([arr[y0 - 4:y0, x0:x1].reshape(-1, 3),
@@ -70,6 +102,13 @@ def infill(arr, box, iters=400):
         sub[1:-1, 1:-1] = (sub[:-2, 1:-1] + sub[2:, 1:-1]
                            + sub[1:-1, :-2] + sub[1:-1, 2:]) / 4
     work[y0:y1, x0:x1] = sub[1:-1, 1:-1]
+
+    if donor_dy:
+        d = arr[y0 + donor_dy:y1 + donor_dy, x0:x1]
+        blurred = np.asarray(
+            Image.fromarray(np.clip(d, 0, 255).astype('uint8')).filter(
+                ImageFilter.GaussianBlur(4)), dtype=np.float32)
+        work[y0:y1, x0:x1] = np.clip(work[y0:y1, x0:x1] + (d - blurred), 0, 255)
     return work
 
 
@@ -111,14 +150,32 @@ def main(station):
         corrected.append(im.transform((W, H), Image.AFFINE, coeff, resample=Image.BICUBIC))
     plate = np.asarray(Image.open(cfg['plate']).convert('RGB').resize((W, H), Image.LANCZOS),
                        dtype=np.float32)
-    print('frame 0 vs plate: before %.2f  after %.2f' % (
-        np.abs(np.asarray(Image.open(FR[0]).convert('RGB'), np.float32) - plate).mean(),
-        np.abs(np.asarray(corrected[0], np.float32) - plate).mean()))
+    before = np.abs(np.asarray(Image.open(FR[0]).convert('RGB'), np.float32) - plate).mean()
+    after_geom = np.abs(np.asarray(corrected[0], np.float32) - plate).mean()
+
+    # Match the clip's grade to the plate's, from the first frame's statistics
+    # and applied to every frame so the loop's own grade stays stable. Without
+    # it a re-graded clip visibly shifts colour as it fades into the scrub.
+    if cfg.get('colour_match'):
+        a0 = np.asarray(corrected[0], dtype=np.float32)
+        src_m, src_s = a0.mean(axis=(0, 1)), a0.std(axis=(0, 1))
+        dst_m, dst_s = plate.mean(axis=(0, 1)), plate.std(axis=(0, 1))
+        graded = []
+        for im in corrected:
+            a = np.asarray(im, dtype=np.float32)
+            graded.append(Image.fromarray(
+                np.clip((a - src_m) / src_s * dst_s + dst_m, 0, 255).astype('uint8')))
+        corrected = graded
+        after = np.abs(np.asarray(corrected[0], np.float32) - plate).mean()
+        print('frame 0 vs plate: raw %.2f -> geometry %.2f -> colour %.2f'
+              % (before, after_geom, after))
+    else:
+        print('frame 0 vs plate: raw %.2f -> geometry %.2f' % (before, after_geom))
 
     # --- 2 & 3. marks and people -------------------------------------------
     sm = Image.new('L', (W, H), 0)
     ImageDraw.Draw(sm).rectangle(cfg['sparkle'], fill=255)
-    sp_mask = np.asarray(sm.filter(ImageFilter.GaussianBlur(7)), np.float32)[..., None] / 255
+    sp_mask = np.asarray(sm.filter(ImageFilter.GaussianBlur(5)), np.float32)[..., None] / 255
 
     fm = Image.new('L', (W, H), 0)
     ImageDraw.Draw(fm).ellipse(cfg['freeze'], fill=255)
@@ -127,7 +184,7 @@ def main(station):
     frozen, proc = None, []
     for im in corrected:
         a = np.asarray(im, dtype=np.float32)
-        a = a * (1 - sp_mask) + infill(a, cfg['sparkle']) * sp_mask
+        a = a * (1 - sp_mask) + infill(a, cfg['sparkle'], cfg.get('donor_dy', 0)) * sp_mask
         if frozen is None:
             frozen = a.copy()
         proc.append(a * (1 - fz_mask) + frozen * fz_mask)
