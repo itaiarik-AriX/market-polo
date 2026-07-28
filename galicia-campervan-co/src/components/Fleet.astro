@@ -138,6 +138,7 @@ const TILTS = [-1.6, 2.4, -2.8, 1.8, -2.1, 2.9];
       </svg>
     </button>
 
+    <div class="gallery-left">
     <div class="gallery-stage">
       <img class="gallery-photo" data-gallery-photo alt="" decoding="async" hidden />
       <p class="gallery-awaiting" data-gallery-awaiting hidden></p>
@@ -154,6 +155,12 @@ const TILTS = [-1.6, 2.4, -2.8, 1.8, -2.1, 2.9];
       </button>
 
       <p class="gallery-counter" data-gallery-counter aria-live="polite"></p>
+    </div>
+
+    {/* Thumbnail strip: without it there is nothing on screen saying more
+        photographs exist. Filled in by the script, since which photos a van has
+        is only known at runtime. */}
+    <div class="gallery-thumbs" data-gallery-thumbs role="tablist" aria-label="Photographs"></div>
     </div>
 
     <div class="gallery-side">
@@ -486,6 +493,34 @@ const TILTS = [-1.6, 2.4, -2.8, 1.8, -2.1, 2.9];
     display: none;
   }
 
+  .gallery-left {
+    min-width: 0;
+  }
+
+  /* Horizontal strip of every photograph. Scrolls within itself — never the
+     page — and the row is hidden entirely for a van with a single photo, where
+     it would just be a lone box saying nothing. */
+  .gallery-thumbs {
+    display: flex;
+    gap: 0.5rem;
+    margin-top: 0.6rem;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scrollbar-width: thin;
+    scrollbar-color: var(--rule-strong) transparent;
+    padding-bottom: 0.25rem;
+  }
+  .gallery-thumbs[hidden] {
+    display: none;
+  }
+  .gallery-thumbs::-webkit-scrollbar {
+    height: 4px;
+  }
+  .gallery-thumbs::-webkit-scrollbar-thumb {
+    background: var(--rule-strong);
+    border-radius: 999px;
+  }
+
   .gallery-side {
     min-width: 0;
   }
@@ -608,6 +643,7 @@ const TILTS = [-1.6, 2.4, -2.8, 1.8, -2.1, 2.9];
     .gallery-stage {
       max-height: 40vh;
     }
+
   }
   @media (max-width: 640px) {
     .fleet {
@@ -630,6 +666,47 @@ const TILTS = [-1.6, 2.4, -2.8, 1.8, -2.1, 2.9];
   data-fleet-data
   set:html={JSON.stringify({ fleet, demo: DEMO_PHOTOS, email: EMAIL })}
 ></script>
+
+<style is:global>
+  /* These style elements the script creates at runtime. Astro's scoped styles
+     compile to `.gallery-thumb[data-astro-cid-…]`, and that attribute is only
+     stamped on markup Astro itself renders — so scoped rules silently do not
+     apply to createElement'd nodes, and the thumbs rendered at their natural
+     1924px. Anchored to .gallery-thumbs so going global leaks nothing. */
+  .gallery-thumbs .gallery-thumb {
+    flex: 0 0 auto;
+    width: 74px;
+    height: 52px;
+    padding: 0;
+    border: 1px solid transparent;
+    border-radius: 5px;
+    overflow: hidden;
+    background: #0a0a0a;
+    opacity: 0.5;
+    cursor: pointer;
+    transition: opacity 0.2s ease, border-color 0.2s ease;
+  }
+  .gallery-thumbs .gallery-thumb img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+  .gallery-thumbs .gallery-thumb:hover,
+  .gallery-thumbs .gallery-thumb:focus-visible {
+    opacity: 0.85;
+  }
+  .gallery-thumbs .gallery-thumb[aria-selected='true'] {
+    opacity: 1;
+    border-color: var(--accent);
+  }
+  @media (max-width: 640px) {
+    .gallery-thumbs .gallery-thumb {
+      width: 60px;
+      height: 42px;
+    }
+  }
+</style>
 
 <script>
   type Van = { id: string; name: string; status: string; blurb: string; photos: string[] };
@@ -745,6 +822,50 @@ const TILTS = [-1.6, 2.4, -2.8, 1.8, -2.1, 2.9];
     const counterEl = panel.querySelector<HTMLElement>('[data-gallery-counter]')!;
     const prevBtn = panel.querySelector<HTMLButtonElement>('[data-gallery-prev]')!;
     const nextBtn = panel.querySelector<HTMLButtonElement>('[data-gallery-next]')!;
+    const thumbsEl = panel.querySelector<HTMLElement>('[data-gallery-thumbs]')!;
+
+    /** Rebuild the thumbnail strip for the van being shown. */
+    function buildThumbs(list: string[], vanName: string) {
+      thumbsEl.textContent = '';
+      // One photograph needs no strip — a single box communicates nothing.
+      thumbsEl.hidden = list.length < 2;
+      if (list.length < 2) return;
+      list.forEach((src, i) => {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'gallery-thumb';
+        b.setAttribute('role', 'tab');
+        b.setAttribute('aria-label', `${vanName} — photograph ${i + 1} of ${list.length}`);
+        const im = document.createElement('img');
+        im.src = src;
+        im.alt = '';
+        im.loading = 'lazy';
+        im.decoding = 'async';
+        b.appendChild(im);
+        b.addEventListener('click', () => {
+          index = i;
+          showPhoto();
+        });
+        thumbsEl.appendChild(b);
+      });
+    }
+
+    /** Mark the active thumb and bring it into view WITHIN the strip. */
+    function syncThumbs() {
+      const kids = Array.from(thumbsEl.children) as HTMLElement[];
+      kids.forEach((el, i) => el.setAttribute('aria-selected', String(i === index)));
+      const active = kids[index];
+      if (!active) return;
+      // Deliberately NOT scrollIntoView: that walks up the ancestor chain and
+      // can scroll the page itself, which is the one thing this project does
+      // not allow. Setting scrollLeft moves only this strip.
+      const left = active.offsetLeft;
+      const right = left + active.offsetWidth;
+      const viewL = thumbsEl.scrollLeft;
+      const viewR = viewL + thumbsEl.clientWidth;
+      if (left < viewL) thumbsEl.scrollLeft = left - 8;
+      else if (right > viewR) thumbsEl.scrollLeft = right - thumbsEl.clientWidth + 8;
+    }
 
     function showPhoto() {
       const van = vanById(vanId);
@@ -764,6 +885,7 @@ const TILTS = [-1.6, 2.4, -2.8, 1.8, -2.1, 2.9];
       photoEl.src = list[index];
       photoEl.alt = `${van?.name ?? ''} — photograph ${index + 1} of ${list.length}`;
       counterEl.textContent = `${index + 1} / ${list.length}`;
+      syncThumbs();
     }
 
     function step(by: number) {
@@ -780,6 +902,7 @@ const TILTS = [-1.6, 2.4, -2.8, 1.8, -2.1, 2.9];
       panel.querySelector('[data-gallery-title]')!.textContent = van.name;
       panel.querySelector('[data-gallery-status]')!.textContent = van.status;
       panel.querySelector('[data-gallery-blurb]')!.textContent = van.blurb;
+      buildThumbs(photosFor(van), van.name);
       showPhoto();
     }
 
