@@ -38,8 +38,17 @@ export interface ModeTimeline {
   basePath: string;
   /** optional lighter frames for small screens; falls back to basePath if absent */
   basePathSmall?: string;
+  /**
+   * Optional 9:16 recut for phones held upright. Cover-fitting the wide frames
+   * to a portrait screen shows only ~26% of their width, so this is a genuinely
+   * different framing rather than just a smaller file — see
+   * scripts/make-portrait-tier.py for the per-station pan.
+   */
+  basePathPortrait?: string;
   /** optional folder of high-res per-station stills, named <section id>.<ext> */
   stationsBase?: string;
+  /** portrait-cropped stills, matching basePathPortrait's framing */
+  stationsBasePortrait?: string;
   /** file extension for station stills (defaults to ext) */
   stationsExt?: string;
   frameCount: number;
@@ -55,7 +64,9 @@ export const timelines: Record<string, ModeTimeline> = {
   hire: {
     basePath: '/sequences/hire/',
     basePathSmall: '/sequences/hire-sm/',
+    basePathPortrait: '/sequences/hire-portrait/',
     stationsBase: '/sequences/hire-stations/',
+    stationsBasePortrait: '/sequences/hire-stations-portrait/',
     stationsExt: 'webp',
     frameCount: 457,
     pad: 4,

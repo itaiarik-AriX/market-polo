@@ -4,15 +4,25 @@ import { timelines, buildTimeline } from '../lib/heroTimeline';
 // Build the list of high-res station stills (only for modes that provide them).
 // Each still is the SAME frame the canvas holds on, at full resolution — so it
 // "sharpens in" seamlessly when the scrub settles on that station.
+// `portraitSrc` is the same station recut 9:16, matching basePathPortrait. The
+// browser picks between them from the media query on the <source>, so the still
+// can never disagree with the frames the scrubber loaded.
 const stationStills = Object.entries(timelines).flatMap(([mode, tl]) =>
   tl.stationsBase
     ? tl.sections.map((s) => ({
         mode,
         id: s.id,
         src: `${tl.stationsBase}${s.id}.${tl.stationsExt ?? tl.ext}`,
+        portraitSrc: tl.stationsBasePortrait
+          ? `${tl.stationsBasePortrait}${s.id}.${tl.stationsExt ?? tl.ext}`
+          : undefined,
       }))
     : []
 );
+
+// Kept in step with `usePortraitTier` in scrollScrubber.ts — the two must agree
+// or a portrait still would fade in over landscape frames.
+const PORTRAIT_MQ = '(max-width: 820px) and (orientation: portrait)';
 
 // Ambient loops, for the stations that declare one (see Section.loop). The clip
 // opens on the same frame the canvas holds on, so it can crossfade against an
@@ -195,15 +205,18 @@ const copy = {
 
     <div class="hero-stills" aria-hidden="true">
       {stationStills.map((st) => (
-        <img
-          class="station-still"
-          data-still-mode={st.mode}
-          data-still-id={st.id}
-          src={st.src}
-          alt=""
-          loading="eager"
-          decoding="async"
-        />
+        <picture>
+          {st.portraitSrc && <source media={PORTRAIT_MQ} srcset={st.portraitSrc} />}
+          <img
+            class="station-still"
+            data-still-mode={st.mode}
+            data-still-id={st.id}
+            src={st.src}
+            alt=""
+            loading="eager"
+            decoding="async"
+          />
+        </picture>
       ))}
     </div>
 
@@ -332,6 +345,12 @@ const copy = {
     position: absolute;
     inset: 0;
     pointer-events: none;
+  }
+  /* The <picture> around each still is only there to carry the portrait
+     <source>; it must not introduce a box of its own, or it would become the
+     containing block the absolutely-positioned still resolves against. */
+  .hero-stills picture {
+    display: contents;
   }
   .station-still {
     position: absolute;
@@ -636,6 +655,10 @@ const copy = {
     const conn = (navigator as any).connection;
     const ambientWanted =
       !window.matchMedia('(prefers-reduced-motion: reduce)').matches &&
+      // The loops are 16:9. On a portrait phone the frames and stills are the
+      // 9:16 recut, so a loop would fade in at a visibly different framing —
+      // drop them there and let the sharp portrait still carry the station.
+      !window.matchMedia('(max-width: 820px) and (orientation: portrait)').matches &&
       !(conn && (conn.saveData || /(^|\W)(slow-)?2g$/.test(conn.effectiveType ?? '')));
     if (!ambientWanted) {
       for (const v of loops) v.remove();

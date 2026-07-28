@@ -15,6 +15,24 @@ export interface ScrollScrubberOptions {
 const useSmallTier =
   typeof window !== 'undefined' && window.matchMedia('(max-width: 820px)').matches;
 
+// A phone held upright cover-fits a 16:9 frame to about a quarter of its width
+// and upscales it roughly 4x — on the opening frame that crops the van out of
+// shot entirely. The portrait tier is the same footage recut as a 9:16 window
+// that pans between stations, so each one stays composed.
+//
+// Gated on orientation as well as width: a small LANDSCAPE viewport wants the
+// wide frames, and would be badly served by a tall crop.
+const usePortraitTier =
+  typeof window !== 'undefined' &&
+  window.matchMedia('(max-width: 820px) and (orientation: portrait)').matches;
+
+/** Which frame folder this client should load, widest match first. */
+export function tierFor(tl: ModeTimeline): string {
+  if (usePortraitTier && tl.basePathPortrait) return tl.basePathPortrait;
+  if (useSmallTier && tl.basePathSmall) return tl.basePathSmall;
+  return tl.basePath;
+}
+
 // How many images to have in flight at once. Browsers cap concurrent requests
 // per origin anyway (~6); keeping our own queue slightly above that keeps the
 // pipe full without dumping hundreds of requests the browser must itself
@@ -23,7 +41,7 @@ const MAX_IN_FLIGHT = 8;
 
 function frameSrc(tl: ModeTimeline, index: number): string {
   const n = String(index + 1).padStart(tl.pad, '0');
-  const base = useSmallTier && tl.basePathSmall ? tl.basePathSmall : tl.basePath;
+  const base = tierFor(tl);
   return `${base}${n}.${tl.ext}`;
 }
 
