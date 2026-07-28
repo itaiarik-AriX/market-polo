@@ -221,26 +221,27 @@ const copy = {
     </div>
 
     <div class="hero-loops" aria-hidden="true">
+      {/* No <source> children and preload="none" on purpose. With both a .mp4
+          and a .webm listed the browser fetched BOTH in full — the comment that
+          used to sit here claimed an unselected source is never fetched, and
+          measurement showed that is not true. Worse, the closing clip
+          downloaded completely while the visitor was still at the top of a
+          900vh scroll: 9.28MB of video before a single deliberate scroll,
+          competing with the frames actually on screen. The script now picks ONE
+          format via canPlayType and assigns it only as its station comes into
+          range — see attachLoopSource below. */}
       {stationLoops.map((lp) => (
         <video
           class="station-loop"
           data-loop-mode={lp.mode}
           data-loop-id={lp.id}
+          data-loop-src={lp.src}
           poster={lp.poster}
-          preload={lp.eager ? 'auto' : 'metadata'}
+          preload="none"
           muted
           loop
           playsinline
-        >
-          {/* H.264 first: on this footage it beat VP9 on quality per byte
-              (1.8MB at 39.7dB against 2.2MB at 38.5dB), and every current
-              browser takes it — a source that is not selected is never
-              fetched, so the VP9 below costs real visitors nothing. It is
-              there for clients without H.264, which includes the headless
-              Chromium this is regression-tested in. */}
-          <source src={`${lp.src}.mp4`} type="video/mp4" />
-          <source src={`${lp.src}.webm`} type="video/webm" />
-        </video>
+        ></video>
       ))}
     </div>
 
@@ -662,17 +663,31 @@ const copy = {
     // Done in script rather than <source media>, which Chrome dropped support
     // for on <video> — only <picture> honours it, which is why the stills can
     // use markup for this and the loops cannot.
-    if (
-      ambientWanted &&
-      window.matchMedia('(max-width: 820px) and (orientation: portrait)').matches
-    ) {
+    const wantPortraitLoops =
+      window.matchMedia('(max-width: 820px) and (orientation: portrait)').matches;
+    if (ambientWanted && wantPortraitLoops) {
       for (const v of loops) {
-        for (const s of Array.from(v.querySelectorAll('source'))) {
-          s.src = s.src.replace(/\.(mp4|webm)$/, '-portrait.$1');
-        }
         v.poster = v.poster.replace('/hire-stations/', '/hire-stations-portrait/');
-        v.load();
       }
+    }
+
+    // Pick ONE format and attach it only when the station is close enough to
+    // matter. Listing both a .mp4 and a .webm as <source> children made the
+    // browser download both in full, and preload alone still pulled the whole
+    // closing clip while the visitor sat at the top — 9.28MB of video before
+    // any deliberate scroll, taken from the bandwidth the frames needed.
+    const probe = document.createElement('video');
+    const loopExt = probe.canPlayType('video/mp4; codecs="avc1.42E01E"') ? 'mp4' : 'webm';
+
+    /** How far ahead of a station's range to start fetching its clip. */
+    const LOOP_PREFETCH = 0.08;
+
+    function attachLoopSource(v: HTMLVideoElement) {
+      if (v.src) return; // already attached
+      const base = v.dataset.loopSrc;
+      if (!base) return;
+      v.src = `${base}${wantPortraitLoops ? '-portrait' : ''}.${loopExt}`;
+      v.load();
     }
     if (!ambientWanted) {
       for (const v of loops) v.remove();
@@ -749,6 +764,13 @@ const copy = {
           }
           const r = rangeById[v.dataset.loopId!];
           const o = r ? opacityForRange(progress, r.start, r.end) : 0;
+          // Fetch a little ahead of the station so the clip is ready by the
+          // time it fades in, but never before. The first station's range
+          // starts at 0, so the landing loop still attaches immediately — it is
+          // the one clip genuinely needed up front.
+          if (r && (o > 0 || (progress > r.start - LOOP_PREFETCH && progress < r.end + LOOP_PREFETCH))) {
+            attachLoopSource(v);
+          }
           v.style.opacity = String(o);
           // Decode only while it is actually visible: by the time the canvas
           // starts scrubbing, every loop is paused.
