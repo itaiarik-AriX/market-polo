@@ -1,0 +1,242 @@
+---
+// Compass cursor. Replaces the system arrow with a needle that swings to point
+// the way the pointer is travelling, then eases back to north once it settles.
+//
+// Three nested elements on purpose, so the three transforms never fight:
+//   .cursor      — position, driven by JS every frame
+//   .cursor-rot  — heading, driven by JS every frame
+//   .cursor-art  — scale, driven by CSS classes so it can transition
+---
+<div class="cursor" data-cursor aria-hidden="true">
+  <div class="cursor-rot" data-cursor-rot>
+    <div class="cursor-art">
+      <svg viewBox="0 0 24 24" fill="none">
+        <circle cx="12" cy="12" r="10.4" stroke="currentColor" stroke-width="1.1" opacity="0.55" />
+        <path d="M12 3.6 L15 12 L12 20.4 L9 12 Z" fill="currentColor" />
+        <circle cx="12" cy="12" r="1.5" fill="var(--bg)" />
+      </svg>
+    </div>
+  </div>
+</div>
+
+<style is:global>
+  /* Only ever set once the script has confirmed a fine pointer — a touch device
+     must keep its native behaviour, and a visitor who has not moved a mouse yet
+     should not have their cursor taken away. */
+  html.has-compass-cursor,
+  html.has-compass-cursor * {
+    cursor: none;
+  }
+  /* Text entry is the one place the native cursor carries information the
+     compass cannot: where the caret will land. Give the I-beam back, and the
+     script hides the compass over these so the two are never both visible. */
+  html.has-compass-cursor input,
+  html.has-compass-cursor textarea,
+  html.has-compass-cursor select {
+    cursor: auto;
+  }
+</style>
+
+<style>
+  .cursor {
+    position: fixed;
+    top: 0;
+    left: 0;
+    z-index: 9999; /* above the header (100) and the station navigator (12) */
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+    will-change: transform;
+  }
+  .cursor.is-visible {
+    opacity: 1;
+  }
+  /* Over a text field the native I-beam takes over (see the global block). */
+  .cursor.is-text {
+    opacity: 0;
+  }
+
+  .cursor-rot {
+    will-change: transform;
+  }
+
+  .cursor-art {
+    width: 26px;
+    height: 26px;
+    margin: -13px 0 0 -13px; /* centre the needle on the true pointer */
+    color: var(--accent);
+    transition: transform 0.22s cubic-bezier(0.2, 0.7, 0.2, 1);
+    /* Keeps the needle legible over the bright frames in the footage without
+       painting a box around it. */
+    filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.55));
+  }
+  .cursor-art svg {
+    display: block;
+    width: 100%;
+    height: 100%;
+  }
+
+  .cursor.is-hot .cursor-art {
+    transform: scale(1.28);
+  }
+  .cursor.is-down .cursor-art {
+    transform: scale(0.88);
+  }
+  .cursor.is-hot.is-down .cursor-art {
+    transform: scale(1.1);
+  }
+
+  /* The compass is decoration built entirely out of motion. With motion turned
+     down there is nothing left worth taking the system cursor away for, so the
+     script never activates — this is only a belt-and-braces guard. */
+  @media (prefers-reduced-motion: reduce) {
+    .cursor {
+      display: none;
+    }
+  }
+</style>
+
+<script>
+  function initCursor() {
+    const el = document.querySelector<HTMLElement>('[data-cursor]');
+    const rot = document.querySelector<HTMLElement>('[data-cursor-rot]');
+    if (!el || !rot) return;
+
+    // Two hard gates. A coarse pointer has no cursor to replace, and taking the
+    // system cursor away there would leave a stray needle on screen after a tap.
+    if (!window.matchMedia('(pointer: fine)').matches) return;
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+
+    const FOLLOW = 0.22; // how hard the needle chases the true pointer
+    const TURN = 0.25; // how hard the heading chases the direction of travel
+    const MOVE_EPS = 0.4; // px/frame of travel that counts as "still moving"
+    const SETTLE_MS = 420; // stillness before the needle returns to north
+    const REST_EPS = 0.05; // close enough to stop the loop entirely
+
+    let tx = 0,
+      ty = 0; // true pointer
+    let fx = 0,
+      fy = 0; // needle, eased
+    let angle = 0; // current heading, degrees
+    let target = 0; // heading it is easing toward
+    let lastMove = 0;
+    let raf = 0;
+    let settleTimer = 0;
+    let started = false;
+
+    const TEXTUAL = 'input, textarea, select';
+    const CLICKABLE = 'a, button, [role="tab"], label, summary, [data-nav-jump]';
+
+    // Shortest way round the circle, so a swing from 350° to 10° goes forward
+    // 20° rather than backward 340°.
+    function delta(from: number, to: number): number {
+      let d = (to - from) % 360;
+      if (d > 180) d -= 360;
+      if (d < -180) d += 360;
+      return d;
+    }
+
+    function render() {
+      el!.style.transform = `translate3d(${fx}px, ${fy}px, 0)`;
+      rot!.style.transform = `rotate(${angle}deg)`;
+    }
+
+    function tick() {
+      const px = fx,
+        py = fy;
+      fx += (tx - fx) * FOLLOW;
+      fy += (ty - fy) * FOLLOW;
+
+      const dx = fx - px;
+      const dy = fy - py;
+      const speed = Math.hypot(dx, dy);
+
+      if (speed > MOVE_EPS) {
+        // +90 because the needle points up at 0°, while atan2 measures from east.
+        target = (Math.atan2(dy, dx) * 180) / Math.PI + 90;
+        lastMove = performance.now();
+      } else if (performance.now() - lastMove > SETTLE_MS) {
+        // Settle to whichever full turn of north is nearest, so it never
+        // unwinds several rotations to get there.
+        target = Math.round(angle / 360) * 360;
+      }
+
+      angle += delta(angle, target) * TURN;
+      render();
+
+      // Stop the loop once there is nothing left to animate. Idling at zero cost
+      // matters here: the hero is a scroll-scrubbed canvas, and a rAF loop that
+      // never sleeps would compete with it for frames.
+      const settled =
+        Math.hypot(tx - fx, ty - fy) < REST_EPS && Math.abs(delta(angle, target)) < 0.2;
+      if (settled) {
+        angle = target;
+        fx = tx;
+        fy = ty;
+        render();
+        raf = 0;
+        // The needle catches up to the pointer long before the settle deadline
+        // passes, so stopping here unconditionally would park it on its last
+        // heading and it would never return to north. Book a wake-up for the
+        // moment the deadline is due; that pass takes the branch above and
+        // eases it home, after which this schedules nothing and the loop is
+        // genuinely idle.
+        const untilSettle = SETTLE_MS - (performance.now() - lastMove);
+        if (untilSettle > 0) {
+          clearTimeout(settleTimer);
+          settleTimer = window.setTimeout(wake, untilSettle + 20);
+        }
+        return;
+      }
+      raf = requestAnimationFrame(tick);
+    }
+
+    function wake() {
+      clearTimeout(settleTimer);
+      settleTimer = 0;
+      if (!raf) raf = requestAnimationFrame(tick);
+    }
+
+    window.addEventListener(
+      'pointermove',
+      (e) => {
+        if (e.pointerType !== 'mouse') return;
+        tx = e.clientX;
+        ty = e.clientY;
+        if (!started) {
+          // First real mouse movement: adopt the pointer's position before
+          // showing anything, so the needle never flies in from the corner.
+          started = true;
+          fx = tx;
+          fy = ty;
+          document.documentElement.classList.add('has-compass-cursor');
+          el!.classList.add('is-visible');
+          render();
+        }
+        wake();
+      },
+      { passive: true }
+    );
+
+    // Delegated, so it covers markup added after load (copy blocks, panels).
+    document.addEventListener('pointerover', (e) => {
+      const t = e.target as Element | null;
+      if (!t || !t.closest) return;
+      el!.classList.toggle('is-text', !!t.closest(TEXTUAL));
+      el!.classList.toggle('is-hot', !!t.closest(CLICKABLE));
+    });
+
+    document.addEventListener('pointerdown', () => el!.classList.add('is-down'));
+    document.addEventListener('pointerup', () => el!.classList.remove('is-down'));
+
+    // Leaving the window entirely, or switching tabs, should not leave a needle
+    // parked on screen.
+    document.addEventListener('pointerleave', () => el!.classList.remove('is-visible'));
+    document.addEventListener('pointerenter', () => {
+      if (started) el!.classList.add('is-visible');
+    });
+    window.addEventListener('blur', () => el!.classList.remove('is-visible'));
+  }
+
+  initCursor();
+</script>
