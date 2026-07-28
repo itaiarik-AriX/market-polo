@@ -64,9 +64,7 @@ export const timelines: Record<string, ModeTimeline> = {
       // `hold` = how much scroll distance is spent paused here reading the copy;
       // `motion` = how much scroll distance the move INTO this station takes
       // (bigger = slower/more cinematic). Both are relative weights — tune freely.
-      // To switch the ambient loop on, drop the encoded clip in as
-      // public/loops/welcome.{mp4,webm} and add: loop: '/loops/welcome'
-      { id: 'welcome', frame: 0, hold: 1.1, motion: 0 },
+      { id: 'welcome', frame: 0, hold: 1.1, motion: 0, loop: '/loops/welcome' },
       { id: 'exterior', frame: 81, hold: 1.2, motion: 2.4 },
       { id: 'amenities', frame: 227, hold: 1.2, motion: 3.0 },
       { id: 'view', frame: 362, hold: 1.2, motion: 2.8 },
