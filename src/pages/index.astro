@@ -66,12 +66,20 @@ const YEAR = new Date().getFullYear();
       gap: 2rem;
     }
     .wordmark {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
       font-family: 'Fraunces', serif;
       font-style: italic;
       font-weight: 400;
       font-size: 1.4rem;
       letter-spacing: -0.01em;
       color: var(--fg);
+    }
+    .logo {
+      height: 40px;
+      width: auto;
+      object-fit: contain;
     }
     .nav-link {
       font-size: 0.92rem;
@@ -316,7 +324,7 @@ const YEAR = new Date().getFullYear();
 
   <header>
     <div class="header-inner">
-      <a href="#top" class="wordmark" aria-label="Market Polo — home">Market <em>Polo</em></a>
+      <a href="#top" class="wordmark" aria-label="Market Polo — home"><img src="/logo.png" alt="Market Polo" class="logo" />Market <em>Polo</em></a>
       <a href="#contact" class="nav-link">Get in touch &rarr;</a>
     </div>
   </header>
