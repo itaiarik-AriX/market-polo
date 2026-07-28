@@ -2,27 +2,36 @@
 // Compass cursor. Replaces the system arrow with a needle that swings to point
 // the way the pointer is travelling, then eases back to north once it settles.
 //
-// Three nested elements on purpose, so the three transforms never fight:
-//   .cursor      — position, driven by JS every frame
-//   .cursor-rot  — heading, driven by JS every frame
-//   .cursor-spin — the over-a-control spin, a CSS animation
-//   .cursor-art  — scale, driven by CSS classes so it can transition
+// Layers, outermost first:
+//   .cursor          — position, driven by JS every frame
+//   .cursor-art      — scale, driven by CSS classes so it can transition
+//   g.compass-heading — heading, driven by JS every frame
+//   g.compass-spin    — the over-a-control spin, a CSS animation
 //
-// The spin needs its own layer: a CSS animation on `transform` replaces the
-// whole property, so putting it on either of the layers above would wipe out
-// the heading or the scale for as long as it ran.
+// Both rotations live INSIDE the svg and wrap the needle only. They used to be
+// wrapper <div>s around the whole mark, which was wrong twice over: the ring
+// and hub turned along with the needle, and — because the negative margin that
+// centres the art sits on the inner element — those wrappers shrink-to-fit to
+// half width, putting `transform-origin: 50% 50%` 6.5px off the pointer and
+// making the whole compass orbit that offset point.
+//
+// The two still need separate groups: a CSS animation on `transform` replaces
+// the whole property, so the spin would otherwise wipe out the heading.
+// `transform-box: view-box` pins both origins to the compass centre.
 ---
 <div class="cursor" data-cursor aria-hidden="true">
-  <div class="cursor-rot" data-cursor-rot>
-    <div class="cursor-spin">
-      <div class="cursor-art">
-        <svg viewBox="0 0 24 24" fill="none">
-          <circle class="compass-ring" cx="12" cy="12" r="10.4" stroke="currentColor" stroke-width="1.1" opacity="0.55" />
+  <div class="cursor-art">
+    <svg viewBox="0 0 24 24" fill="none">
+      <circle class="compass-ring" cx="12" cy="12" r="10.4" stroke="currentColor" stroke-width="1.1" opacity="0.55" />
+      <g class="compass-heading" data-cursor-rot>
+        <g class="compass-spin">
           <path d="M12 3.6 L15 12 L12 20.4 L9 12 Z" fill="currentColor" />
-          <circle cx="12" cy="12" r="1.5" fill="var(--bg)" />
-        </svg>
-      </div>
-    </div>
+        </g>
+      </g>
+      {/* Drawn last so it stays on top of the needle: this dot is the actual
+          hotspot, and it must sit dead still on the pointer at all times. */}
+      <circle cx="12" cy="12" r="1.5" fill="var(--bg)" />
+    </svg>
   </div>
 </div>
 
@@ -68,7 +77,16 @@
     opacity: 0;
   }
 
-  .cursor-rot {
+  /* view-box resolves 50% 50% against the 24x24 viewBox, i.e. the compass
+     centre (12,12) — which is the pointer. Without it the origin falls back to
+     each group's own tight bounding box (the needle's, here), which would swing
+     the needle around its own middle instead of around the hub. */
+  .compass-heading,
+  .compass-spin {
+    transform-box: view-box;
+    transform-origin: 50% 50%;
+  }
+  .compass-spin {
     will-change: transform;
   }
 
@@ -100,11 +118,9 @@
 
   /* Over something clickable the needle loses its bearing and spins, the way a
      compass does near metal. That reads as "this does something" without
-     needing a second shape, and it happens where the pointer already is. */
-  .cursor-spin {
-    will-change: transform;
-  }
-  .cursor.is-hot .cursor-spin {
+     needing a second shape, and it happens where the pointer already is.
+     Only the needle turns — the dial and the hub stay put. */
+  .cursor.is-hot .compass-spin {
     animation: compass-spin 0.85s linear infinite;
   }
   @keyframes compass-spin {
