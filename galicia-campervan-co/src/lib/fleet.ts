@@ -13,10 +13,11 @@ export type Van = {
   /**
    * Gallery photos, in order; the first is the one on the polaroid.
    *
-   * Empty until the real Nomad photos land in `public/fleet/<id>/`. An empty
-   * list renders an explicit "photographs coming" frame rather than borrowing
-   * the hero stills, so nothing on the page ever implies those stills are this
-   * van's photos. Pass `?photos=demo` to preview the treatment with them.
+   * Not listed by hand — Fleet.astro reads `public/fleet/<id>/` at build time
+   * and sorts by filename, so adding a photograph is dropping a file in. An
+   * empty folder renders an explicit "photographs coming" frame rather than
+   * borrowing the hero stills, so nothing on the page ever implies those stills
+   * are this van's photos. Pass `?photos=demo` to preview with them.
    */
   photos: string[];
 };
@@ -58,19 +59,19 @@ const copy: Record<string, Record<string, VanCopy>> = {
   },
 };
 
-const ids = ['nomad'];
+export const ids = ['nomad'];
 
-/** Photos on disk per van. Fill in as real photography arrives. */
-const photos: Record<string, string[]> = {
-  nomad: [],
-};
-
-export function fleetFor(lang: string): Van[] {
+/**
+ * Photos are discovered from disk by Fleet.astro and handed back in here, so
+ * this module stays free of `node:fs` — it is imported by the browser bundle
+ * too, and a filesystem import there would break the build.
+ */
+export function fleetFor(lang: string, photos: Record<string, string[]> = {}): Van[] {
   const byLang = copy[lang] ?? copy.en;
   return ids.map((id) => ({ id, ...(byLang[id] ?? copy.en[id]), photos: photos[id] ?? [] }));
 }
 
 /** Every language's fleet, for rendering all variants up front like Hero does. */
-export const fleetByLang: Record<string, Van[]> = Object.fromEntries(
-  Object.keys(copy).map((lang) => [lang, fleetFor(lang)])
-);
+export function fleetByLang(photos: Record<string, string[]> = {}): Record<string, Van[]> {
+  return Object.fromEntries(Object.keys(copy).map((lang) => [lang, fleetFor(lang, photos)]));
+}

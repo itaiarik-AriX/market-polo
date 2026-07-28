@@ -1,6 +1,30 @@
 ---
-import { fleetByLang, DEMO_PHOTOS } from '../lib/fleet';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fleetByLang, ids, DEMO_PHOTOS } from '../lib/fleet';
 import { BOOKING_URL, EMAIL } from '../lib/site';
+
+// Photographs are discovered from disk at build time rather than listed by
+// hand, so adding one is dropping a file into public/fleet/<id>/ — no code
+// edit, no chance of the list and the folder drifting apart. Sorted by
+// filename, so 01…09 is the gallery order and 01 is the polaroid.
+const PHOTO_EXT = /\.(jpe?g|png|webp|avif)$/i;
+
+const photosByVan: Record<string, string[]> = Object.fromEntries(
+  ids.map((id) => {
+    const dir = path.join(process.cwd(), 'public', 'fleet', id);
+    let files: string[] = [];
+    try {
+      files = fs.readdirSync(dir).filter((f) => PHOTO_EXT.test(f)).sort();
+    } catch {
+      // No folder yet — the van simply has no photographs, which the card and
+      // the overlay both already handle.
+    }
+    return [id, files.map((f) => `/fleet/${id}/${f}`)];
+  })
+);
+
+const fleet = fleetByLang(photosByVan);
 
 // Section copy, keyed by language like Hero.astro. Spanish carries the English
 // strings until translation.
@@ -67,7 +91,7 @@ const TILTS = [-1.6, 2.4, -2.8, 1.8, -2.1, 2.9];
     ))}
 
     <ul class="fleet-grid">
-      {Object.entries(fleetByLang).map(([lang, vans]) =>
+      {Object.entries(fleet).map(([lang, vans]) =>
         vans.map((van, i) => (
           <li class="fleet-item" data-van-lang={lang} hidden={lang !== 'en'}>
             <button
@@ -598,11 +622,27 @@ const TILTS = [-1.6, 2.4, -2.8, 1.8, -2.1, 2.9];
   }
 </style>
 
+{/* Build-time data handed to the script below as JSON rather than through
+    define:vars — that directive inlines the script verbatim, which would ship
+    this component's TypeScript to the browser uncompiled. */}
+<script
+  type="application/json"
+  data-fleet-data
+  set:html={JSON.stringify({ fleet, demo: DEMO_PHOTOS, email: EMAIL })}
+></script>
+
 <script>
-  import { fleetByLang, DEMO_PHOTOS } from '../lib/fleet';
-  import { EMAIL } from '../lib/site';
+  type Van = { id: string; name: string; status: string; blurb: string; photos: string[] };
 
   function initFleet() {
+    const dataEl = document.querySelector<HTMLElement>('[data-fleet-data]');
+    if (!dataEl?.textContent) return;
+    const { fleet: FLEET, demo: DEMO_PHOTOS, email: EMAIL } = JSON.parse(dataEl.textContent) as {
+      fleet: Record<string, Van[]>;
+      demo: string[];
+      email: string;
+    };
+
     const section = document.querySelector<HTMLElement>('[data-fleet]');
     const gallery = document.querySelector<HTMLElement>('[data-gallery]');
     const panel = document.querySelector<HTMLElement>('[data-gallery-panel]');
@@ -645,10 +685,10 @@ const TILTS = [-1.6, 2.4, -2.8, 1.8, -2.1, 2.9];
 
     const t = () => strings[lang as keyof typeof strings] ?? strings.en;
     const vanById = (id: string) =>
-      (fleetByLang[lang] ?? fleetByLang.en).find((v) => v.id === id);
+      (FLEET[lang] ?? FLEET.en).find((v) => v.id === id);
 
     // ---- thumbnails ------------------------------------------------------
-    for (const [l, vans] of Object.entries(fleetByLang)) {
+    for (const [l, vans] of Object.entries(FLEET)) {
       for (const van of vans) {
         const img = section.querySelector<HTMLImageElement>(`[data-van-thumb="${van.id}"]`);
         const empty = section.querySelector<HTMLElement>(`[data-van-empty="${van.id}"]`);
