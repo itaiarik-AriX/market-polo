@@ -64,13 +64,6 @@ const BOOKING_URL = '#';
     text-transform: uppercase;
   }
 
-  .lang-toggle::after {
-    content: '';
-    width: 1px;
-    height: 14px;
-    background: rgba(245, 241, 232, 0.2);
-  }
-
   .lang-btn {
     border: none;
     background: transparent;
@@ -82,6 +75,16 @@ const BOOKING_URL = '#';
     padding: 0.25rem 0;
     cursor: pointer;
     transition: color 0.25s ease;
+  }
+
+  .lang-btn:first-child::after {
+    content: '';
+    display: inline-block;
+    width: 1px;
+    height: 14px;
+    background: rgba(245, 241, 232, 0.2);
+    margin-left: 0.5rem;
+    vertical-align: middle;
   }
 
   .lang-btn[aria-selected='true'] {
