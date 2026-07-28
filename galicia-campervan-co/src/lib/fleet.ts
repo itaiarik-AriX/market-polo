@@ -1,0 +1,76 @@
+// The fleet. Single source of truth for what appears in the polaroid grid and
+// in each van's gallery overlay — adding van two should be a data edit here,
+// never a component edit.
+
+export type Van = {
+  id: string;
+  /** Written across the bottom of the polaroid. */
+  name: string;
+  /** Short status line, e.g. availability. Shown on the card and in the overlay. */
+  status: string;
+  /** One or two sentences, overlay only. */
+  blurb: string;
+  /**
+   * Gallery photos, in order; the first is the one on the polaroid.
+   *
+   * Empty until the real Nomad photos land in `public/fleet/<id>/`. An empty
+   * list renders an explicit "photographs coming" frame rather than borrowing
+   * the hero stills, so nothing on the page ever implies those stills are this
+   * van's photos. Pass `?photos=demo` to preview the treatment with them.
+   */
+  photos: string[];
+};
+
+/**
+ * Stand-ins for judging the polaroid treatment before the real photos arrive.
+ * Reachable only via `?photos=demo`, following the same query-flag convention
+ * as `?nav=a-e` and `?debug=1`. These are hero station stills, not photographs
+ * of a real van.
+ */
+export const DEMO_PHOTOS = [
+  '/sequences/hire-stations/exterior.webp',
+  '/sequences/hire-stations/welcome.webp',
+  '/sequences/hire-stations/amenities.webp',
+  '/sequences/hire-stations/view.webp',
+  '/sequences/hire-stations/closing.webp',
+];
+
+// Keyed by language then van id, matching how Hero.astro keys its copy. Spanish
+// carries the English strings until translation.
+type VanCopy = Pick<Van, 'name' | 'status' | 'blurb'>;
+
+const copy: Record<string, Record<string, VanCopy>> = {
+  en: {
+    nomad: {
+      name: 'Nomad',
+      status: 'Available for rent',
+      blurb:
+        'Our first van, and still the one we would take ourselves. Sleeps two, cooks properly, and gets you somewhere with a view.',
+    },
+  },
+  es: {
+    nomad: {
+      name: 'Nomad',
+      status: 'Available for rent',
+      blurb:
+        'Our first van, and still the one we would take ourselves. Sleeps two, cooks properly, and gets you somewhere with a view.',
+    },
+  },
+};
+
+const ids = ['nomad'];
+
+/** Photos on disk per van. Fill in as real photography arrives. */
+const photos: Record<string, string[]> = {
+  nomad: [],
+};
+
+export function fleetFor(lang: string): Van[] {
+  const byLang = copy[lang] ?? copy.en;
+  return ids.map((id) => ({ id, ...(byLang[id] ?? copy.en[id]), photos: photos[id] ?? [] }));
+}
+
+/** Every language's fleet, for rendering all variants up front like Hero does. */
+export const fleetByLang: Record<string, Van[]> = Object.fromEntries(
+  Object.keys(copy).map((lang) => [lang, fleetFor(lang)])
+);

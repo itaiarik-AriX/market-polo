@@ -1,0 +1,862 @@
+---
+import { fleetByLang, DEMO_PHOTOS } from '../lib/fleet';
+import { BOOKING_URL, EMAIL } from '../lib/site';
+
+// Section copy, keyed by language like Hero.astro. Spanish carries the English
+// strings until translation.
+const copy = {
+  en: {
+    eyebrow: '— The fleet',
+    title: 'Vans with names.',
+    lede: 'We keep a small fleet, and we know each one personally. Pick one to look inside.',
+    open: 'View photographs',
+    close: 'Close',
+    prev: 'Previous photograph',
+    next: 'Next photograph',
+    awaiting: 'Photographs coming',
+    book: 'Check availability',
+    divider: 'Rather ask us first?',
+    submit: 'Send enquiry',
+    labels: {
+      from: 'From',
+      to: 'To',
+      name: 'Your name',
+      notes: 'Anything we should know?',
+      optional: '(optional)',
+      placeholder_notes: "Where you're dreaming of going, how many of you…",
+    },
+  },
+  es: {
+    eyebrow: '— The fleet',
+    title: 'Vans with names.',
+    lede: 'We keep a small fleet, and we know each one personally. Pick one to look inside.',
+    open: 'View photographs',
+    close: 'Close',
+    prev: 'Previous photograph',
+    next: 'Next photograph',
+    awaiting: 'Photographs coming',
+    book: 'Check availability',
+    divider: 'Rather ask us first?',
+    submit: 'Send enquiry',
+    labels: {
+      from: 'From',
+      to: 'To',
+      name: 'Your name',
+      notes: 'Anything we should know?',
+      optional: '(optional)',
+      placeholder_notes: "Where you're dreaming of going, how many of you…",
+    },
+  },
+};
+
+// Fixed per-index tilt rather than a random one, so a card never moves between
+// renders. A lone card sits almost straight; the scatter only builds up as vans
+// are added, which is what stops one van looking like a mistake.
+const TILTS = [-1.6, 2.4, -2.8, 1.8, -2.1, 2.9];
+---
+{/* data-light-section tells the fixed header to switch to dark ink while it is
+    over this band — its cream ground would otherwise swallow the cream text. */}
+<section class="fleet" id="fleet" data-fleet data-light-section hidden>
+  <div class="fleet-inner">
+    {Object.entries(copy).map(([lang, c]) => (
+      <header class="fleet-head" data-fleet-lang={lang} hidden={lang !== 'en'}>
+        <p class="fleet-eyebrow">{c.eyebrow}</p>
+        <h2 class="serif fleet-title">{c.title}</h2>
+        <p class="fleet-lede">{c.lede}</p>
+      </header>
+    ))}
+
+    <ul class="fleet-grid">
+      {Object.entries(fleetByLang).map(([lang, vans]) =>
+        vans.map((van, i) => (
+          <li class="fleet-item" data-van-lang={lang} hidden={lang !== 'en'}>
+            <button
+              type="button"
+              class="polaroid"
+              style={`--tilt:${TILTS[i % TILTS.length]}deg`}
+              data-van-open={van.id}
+              aria-haspopup="dialog"
+            >
+              <span class="polaroid-photo">
+                {/* src is filled in by the script: the demo flag decides which
+                    set is used, and that is only knowable in the browser. */}
+                <img data-van-thumb={van.id} alt="" decoding="async" loading="lazy" hidden />
+                <span class="polaroid-empty" data-van-empty={van.id}>
+                  {copy[lang as keyof typeof copy].awaiting}
+                </span>
+                <span class="polaroid-grain" aria-hidden="true"></span>
+              </span>
+              <span class="polaroid-caption">
+                <span class="serif polaroid-name">{van.name}</span>
+                <span class="polaroid-status">{van.status}</span>
+              </span>
+            </button>
+          </li>
+        ))
+      )}
+    </ul>
+  </div>
+</section>
+
+<div class="gallery" data-gallery hidden>
+  <div class="gallery-backdrop" data-gallery-close></div>
+
+  <div
+    class="gallery-panel"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="gallery-title"
+    data-gallery-panel
+  >
+    <button type="button" class="gallery-x" data-gallery-close aria-label="Close">
+      <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+        <path d="M6 6 L18 18 M18 6 L6 18" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
+      </svg>
+    </button>
+
+    <div class="gallery-stage">
+      <img class="gallery-photo" data-gallery-photo alt="" decoding="async" hidden />
+      <p class="gallery-awaiting" data-gallery-awaiting hidden></p>
+
+      <button type="button" class="gallery-arrow is-prev" data-gallery-prev aria-label="Previous">
+        <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+          <path d="M15 4 L7 12 L15 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
+        </svg>
+      </button>
+      <button type="button" class="gallery-arrow is-next" data-gallery-next aria-label="Next">
+        <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+          <path d="M9 4 L17 12 L9 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
+        </svg>
+      </button>
+
+      <p class="gallery-counter" data-gallery-counter aria-live="polite"></p>
+    </div>
+
+    <div class="gallery-side">
+      <h2 class="serif gallery-title" id="gallery-title" data-gallery-title></h2>
+      <p class="gallery-status" data-gallery-status></p>
+      <p class="gallery-blurb" data-gallery-blurb></p>
+
+      <a
+        class="book-cta"
+        data-gallery-book
+        href={BOOKING_URL}
+        target="_blank"
+        rel="noopener noreferrer"
+      ></a>
+
+      <div class="or-rule"><span data-gallery-divider></span></div>
+
+      {/* The hire enquiry form, moved here wholesale from Enquire.astro so
+          booking and asking both live with the van they refer to. */}
+      <form class="enquiry-form" data-gallery-form>
+        <div class="field-row">
+          <label>
+            <span data-l="from"></span>
+            <input type="date" name="from" required />
+          </label>
+          <label>
+            <span data-l="to"></span>
+            <input type="date" name="to" required />
+          </label>
+        </div>
+        <label>
+          <span data-l="name"></span>
+          <input type="text" name="name" required autocomplete="name" />
+        </label>
+        <label>
+          <span data-l="notes"></span> <span class="optional" data-l="optional"></span>
+          <textarea name="notes" rows="3" data-p="placeholder_notes"></textarea>
+        </label>
+        <button type="submit" class="submit-btn is-secondary" data-l="submit"></button>
+      </form>
+    </div>
+  </div>
+</div>
+
+<style>
+  /* Warm paper, not the page's near-black. Polaroids need something to lie on,
+     and the bright band gives the page somewhere to arrive after the video. */
+  .fleet {
+    --paper: #ede6d8;
+    --ink: #241a12;
+    --ink-dim: rgba(36, 26, 18, 0.62);
+    position: relative;
+    z-index: 10;
+    background: var(--paper);
+    color: var(--ink);
+    padding: 7rem 2rem;
+  }
+  .fleet[hidden] {
+    display: none;
+  }
+  .fleet-inner {
+    max-width: 1100px;
+    margin: 0 auto;
+  }
+  .fleet-head {
+    text-align: center;
+    max-width: 620px;
+    margin: 0 auto 4rem;
+  }
+  .fleet-head[hidden] {
+    display: none;
+  }
+  .fleet-eyebrow {
+    font-size: 0.72rem;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--accent-deep);
+    font-weight: 500;
+  }
+  .fleet-title {
+    font-weight: 400;
+    font-size: clamp(2rem, 4.5vw, 3rem);
+    line-height: 1.1;
+    letter-spacing: -0.02em;
+    margin: 1.25rem 0 1rem;
+  }
+  .fleet-lede {
+    color: var(--ink-dim);
+    font-size: 1.05rem;
+  }
+
+  .fleet-grid {
+    list-style: none;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: clamp(2rem, 5vw, 4rem);
+  }
+  .fleet-item[hidden] {
+    display: none;
+  }
+
+  /* True polaroid proportions: 88x107 frame around a 79x79 image, so the side
+     borders are even and the bottom one is much deeper. A square with a caption
+     underneath reads as a card, not a photograph. */
+  .polaroid {
+    --w: clamp(220px, 26vw, 300px);
+    display: block;
+    width: var(--w);
+    padding: calc(var(--w) * 0.051);
+    padding-bottom: calc(var(--w) * 0.19);
+    border: none;
+    background: #fbf9f4;
+    font: inherit;
+    color: inherit;
+    text-align: center;
+    transform: rotate(var(--tilt));
+    box-shadow: 0 10px 24px rgba(46, 30, 18, 0.18), 0 2px 6px rgba(46, 30, 18, 0.14);
+    transition: transform 0.35s cubic-bezier(0.2, 0.7, 0.2, 1), box-shadow 0.35s ease;
+  }
+  .polaroid:hover,
+  .polaroid:focus-visible {
+    /* Straightens as it lifts — the pile tidies itself under your hand. */
+    transform: rotate(0deg) translateY(-8px) scale(1.02);
+    box-shadow: 0 22px 44px rgba(46, 30, 18, 0.26), 0 4px 10px rgba(46, 30, 18, 0.16);
+  }
+  .polaroid:focus-visible {
+    outline: 2px solid var(--accent-deep);
+    outline-offset: 4px;
+  }
+
+  .polaroid-photo {
+    position: relative;
+    display: block;
+    aspect-ratio: 1 / 1;
+    overflow: hidden;
+    background: #2a2118;
+  }
+  .polaroid-photo img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+    /* The vintage pass, in CSS rather than baked into the files: these are
+       static and below the fold so there is no scroll cost, and it means any
+       photograph can be dropped in without a processing step. */
+    filter: sepia(0.28) saturate(1.15) contrast(1.06) brightness(1.02);
+  }
+  .polaroid-photo img[hidden] {
+    display: none;
+  }
+  .polaroid-empty {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.68rem;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: rgba(245, 241, 232, 0.45);
+  }
+  .polaroid-empty[hidden] {
+    display: none;
+  }
+  /* Grain and a warm corner wash, both self-contained: the CSP blocks external
+     assets, so the noise is an inline feTurbulence data-URI. */
+  .polaroid-grain {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    opacity: 0.5;
+    mix-blend-mode: multiply;
+    background-image:
+      radial-gradient(120% 100% at 78% 12%, rgba(255, 214, 150, 0.22) 0%, rgba(255, 214, 150, 0) 55%),
+      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23n)' opacity='0.35'/%3E%3C/svg%3E");
+  }
+
+  .polaroid-caption {
+    display: block;
+    padding-top: calc(var(--w) * 0.055);
+  }
+  .polaroid-name {
+    display: block;
+    font-style: italic;
+    font-size: clamp(1.2rem, 2.4vw, 1.5rem);
+    color: var(--ink);
+    line-height: 1.1;
+  }
+  .polaroid-status {
+    display: block;
+    margin-top: 0.3rem;
+    font-size: 0.62rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--accent-deep);
+  }
+
+  /* ---- Gallery overlay --------------------------------------------------- */
+  .gallery {
+    position: fixed;
+    inset: 0;
+    z-index: 200; /* over the header (100), under the compass cursor (9999) */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: clamp(0.75rem, 3vw, 2.5rem);
+  }
+  .gallery[hidden] {
+    display: none;
+  }
+  .gallery-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(8, 6, 4, 0.82);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    border: none;
+  }
+  .gallery-panel {
+    position: relative;
+    display: grid;
+    grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
+    /* Without this the grid stretches the photo column to match the taller form
+       column, and `object-fit: contain` fills the difference with black bands. */
+    align-items: start;
+    gap: clamp(1rem, 2.5vw, 2rem);
+    width: min(1100px, 100%);
+    max-height: 100%;
+    overflow: auto;
+    padding: clamp(1rem, 2.5vw, 2rem);
+    background: var(--bg-soft);
+    border: 1px solid var(--rule);
+    border-radius: 14px;
+  }
+  .gallery-x {
+    position: absolute;
+    top: 0.6rem;
+    right: 0.6rem;
+    z-index: 2;
+    display: grid;
+    place-items: center;
+    width: 40px;
+    height: 40px;
+    border: 1px solid var(--rule);
+    border-radius: 999px;
+    background: rgba(11, 12, 13, 0.7);
+    color: var(--fg);
+    transition: border-color 0.25s ease, color 0.25s ease;
+  }
+  .gallery-x:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+
+  /* Landscape by default so the frame matches the photography rather than the
+     column beside it; a portrait shot letterboxes a little, which is the right
+     way round. */
+  .gallery-stage {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    aspect-ratio: 3 / 2;
+    max-height: min(72vh, 620px);
+    background: #0a0a0a;
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  .gallery-photo {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  .gallery-photo[hidden] {
+    display: none;
+  }
+  .gallery-awaiting {
+    padding: 5rem 1rem;
+    font-size: 0.72rem;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--fg-dim);
+    text-align: center;
+  }
+  .gallery-awaiting[hidden] {
+    display: none;
+  }
+  .gallery-arrow {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    display: grid;
+    place-items: center;
+    width: 44px;
+    height: 44px;
+    border: 1px solid var(--rule);
+    border-radius: 999px;
+    background: rgba(11, 12, 13, 0.6);
+    color: var(--fg);
+    transition: border-color 0.25s ease, color 0.25s ease, opacity 0.25s ease;
+  }
+  .gallery-arrow:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+  .gallery-arrow[hidden] {
+    display: none;
+  }
+  .is-prev {
+    left: 0.6rem;
+  }
+  .is-next {
+    right: 0.6rem;
+  }
+  .gallery-counter {
+    position: absolute;
+    bottom: 0.7rem;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 0.7rem;
+    letter-spacing: 0.12em;
+    color: var(--fg-dim);
+    background: rgba(11, 12, 13, 0.6);
+    padding: 0.2rem 0.6rem;
+    border-radius: 999px;
+  }
+  .gallery-counter[hidden] {
+    display: none;
+  }
+
+  .gallery-side {
+    min-width: 0;
+  }
+  .gallery-title {
+    font-weight: 400;
+    font-style: italic;
+    font-size: clamp(1.8rem, 3.4vw, 2.6rem);
+    line-height: 1.1;
+    letter-spacing: -0.02em;
+  }
+  .gallery-status {
+    margin-top: 0.5rem;
+    font-size: 0.66rem;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--accent);
+  }
+  .gallery-blurb {
+    margin-top: 1rem;
+    color: var(--fg-dim);
+    font-size: 0.98rem;
+  }
+
+  /* Booking is the one loud action here, same treatment it had in Enquire. */
+  .book-cta {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-top: 1.6rem;
+    background: var(--accent);
+    color: #1a1206;
+    border-radius: 999px;
+    font-weight: 500;
+    font-size: 1rem;
+    padding: 0.9rem 2rem;
+    min-height: 50px;
+    transition: background 0.25s ease, transform 0.25s ease;
+  }
+  .book-cta:hover {
+    background: var(--accent-deep);
+    transform: translateY(-1px);
+  }
+
+  .or-rule {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin: 2rem 0 1.4rem;
+    color: var(--fg-dim);
+    font-size: 0.82rem;
+    letter-spacing: 0.04em;
+  }
+  .or-rule::before,
+  .or-rule::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--rule);
+  }
+
+  .enquiry-form {
+    display: flex;
+    flex-direction: column;
+    gap: 1.1rem;
+  }
+  .field-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.1rem;
+  }
+  label {
+    display: flex;
+    flex-direction: column;
+    gap: 0.45rem;
+    font-size: 0.82rem;
+    letter-spacing: 0.04em;
+    color: var(--fg-dim);
+  }
+  .optional {
+    opacity: 0.6;
+  }
+  input,
+  textarea {
+    background: var(--bg);
+    border: 1px solid var(--rule);
+    border-radius: 8px;
+    color: var(--fg);
+    font: inherit;
+    font-size: 0.98rem;
+    padding: 0.7rem 0.9rem;
+    transition: border-color 0.25s ease;
+    color-scheme: dark;
+  }
+  input:focus,
+  textarea:focus {
+    outline: none;
+    border-color: var(--accent);
+  }
+  .submit-btn {
+    align-self: start;
+    background: transparent;
+    color: var(--fg);
+    border: 1px solid var(--rule-strong);
+    border-radius: 999px;
+    font: inherit;
+    font-weight: 500;
+    padding: 0.8rem 1.8rem;
+    min-height: 46px;
+    transition: border-color 0.25s ease, color 0.25s ease;
+  }
+  .submit-btn:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+
+  @media (max-width: 860px) {
+    .gallery-panel {
+      grid-template-columns: 1fr;
+    }
+    .gallery-stage {
+      max-height: 40vh;
+    }
+  }
+  @media (max-width: 640px) {
+    .fleet {
+      padding: 5rem 1.25rem;
+    }
+    .polaroid {
+      --w: min(78vw, 320px);
+    }
+    .field-row {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>
+
+<script>
+  import { fleetByLang, DEMO_PHOTOS } from '../lib/fleet';
+  import { EMAIL } from '../lib/site';
+
+  function initFleet() {
+    const section = document.querySelector<HTMLElement>('[data-fleet]');
+    const gallery = document.querySelector<HTMLElement>('[data-gallery]');
+    const panel = document.querySelector<HTMLElement>('[data-gallery-panel]');
+    if (!section || !gallery || !panel) return;
+
+    // Stand-in photographs, opt-in only, so the treatment can be judged before
+    // the real ones exist. Never on for a real visitor.
+    const demo = new URLSearchParams(location.search).get('photos') === 'demo';
+    const photosFor = (van: { photos: string[] }) => (demo ? DEMO_PHOTOS : van.photos);
+
+    const strings = {
+      en: {
+        open: 'View photographs',
+        book: 'Check availability',
+        divider: 'Rather ask us first?',
+        submit: 'Send enquiry',
+        awaiting: 'Photographs coming',
+        from: 'From',
+        to: 'To',
+        name: 'Your name',
+        notes: 'Anything we should know?',
+        optional: '(optional)',
+        placeholder_notes: "Where you're dreaming of going, how many of you…",
+        subject: 'Hire enquiry',
+        greeting: 'Hi Coruña Campervan,',
+        intro: "I'd like to enquire about hiring",
+        dates: 'Dates',
+        nameLabel: 'Name',
+        more: 'A bit more about the trip',
+      },
+    };
+    strings.es = strings.en;
+
+    let lang = localStorage.getItem('lang') || 'en';
+    let mode = 'hire';
+    let vanId = '';
+    let index = 0;
+    let lastFocus: HTMLElement | null = null;
+    let scrollYBeforeOpen = 0;
+
+    const t = () => strings[lang as keyof typeof strings] ?? strings.en;
+    const vanById = (id: string) =>
+      (fleetByLang[lang] ?? fleetByLang.en).find((v) => v.id === id);
+
+    // ---- thumbnails ------------------------------------------------------
+    for (const [l, vans] of Object.entries(fleetByLang)) {
+      for (const van of vans) {
+        const img = section.querySelector<HTMLImageElement>(`[data-van-thumb="${van.id}"]`);
+        const empty = section.querySelector<HTMLElement>(`[data-van-empty="${van.id}"]`);
+        const list = photosFor(van);
+        if (img && list.length) {
+          img.src = list[0];
+          img.hidden = false;
+          if (empty) empty.hidden = true;
+        }
+        void l;
+      }
+    }
+
+    // ---- language / mode -------------------------------------------------
+    function applyLang() {
+      for (const el of section!.querySelectorAll<HTMLElement>('[data-fleet-lang]')) {
+        el.hidden = el.dataset.fleetLang !== lang;
+      }
+      for (const el of section!.querySelectorAll<HTMLElement>('[data-van-lang]')) {
+        el.hidden = el.dataset.vanLang !== lang;
+      }
+      const s = t();
+      for (const el of panel!.querySelectorAll<HTMLElement>('[data-l]')) {
+        el.textContent = (s as any)[el.dataset.l!] ?? '';
+      }
+      for (const el of panel!.querySelectorAll<HTMLElement>('[data-p]')) {
+        (el as HTMLTextAreaElement).placeholder = (s as any)[el.dataset.p!] ?? '';
+      }
+      const divider = panel!.querySelector<HTMLElement>('[data-gallery-divider]');
+      if (divider) divider.textContent = s.divider;
+      const book = panel!.querySelector<HTMLElement>('[data-gallery-book]');
+      if (book) book.textContent = s.book;
+      if (vanId) fillPanel(vanId);
+    }
+
+    // The fleet is Hire-only; Build keeps the section it already had.
+    function applyMode() {
+      section!.hidden = mode !== 'hire';
+      if (mode !== 'hire' && !gallery!.hidden) close();
+    }
+
+    document.addEventListener('mode-change', (e) => {
+      mode = (e as CustomEvent).detail.mode;
+      applyMode();
+    });
+    document.addEventListener('language-change', (e) => {
+      lang = (e as CustomEvent).detail.lang;
+      applyLang();
+    });
+
+    // ---- gallery ---------------------------------------------------------
+    const photoEl = panel.querySelector<HTMLImageElement>('[data-gallery-photo]')!;
+    const awaitingEl = panel.querySelector<HTMLElement>('[data-gallery-awaiting]')!;
+    const counterEl = panel.querySelector<HTMLElement>('[data-gallery-counter]')!;
+    const prevBtn = panel.querySelector<HTMLButtonElement>('[data-gallery-prev]')!;
+    const nextBtn = panel.querySelector<HTMLButtonElement>('[data-gallery-next]')!;
+
+    function showPhoto() {
+      const van = vanById(vanId);
+      const list = van ? photosFor(van) : [];
+      const many = list.length > 1;
+      prevBtn.hidden = !many;
+      nextBtn.hidden = !many;
+      counterEl.hidden = !many;
+      if (!list.length) {
+        photoEl.hidden = true;
+        awaitingEl.hidden = false;
+        awaitingEl.textContent = t().awaiting;
+        return;
+      }
+      awaitingEl.hidden = true;
+      photoEl.hidden = false;
+      photoEl.src = list[index];
+      photoEl.alt = `${van?.name ?? ''} — photograph ${index + 1} of ${list.length}`;
+      counterEl.textContent = `${index + 1} / ${list.length}`;
+    }
+
+    function step(by: number) {
+      const van = vanById(vanId);
+      const n = van ? photosFor(van).length : 0;
+      if (n < 2) return;
+      index = (index + by + n) % n;
+      showPhoto();
+    }
+
+    function fillPanel(id: string) {
+      const van = vanById(id);
+      if (!van) return;
+      panel.querySelector('[data-gallery-title]')!.textContent = van.name;
+      panel.querySelector('[data-gallery-status]')!.textContent = van.status;
+      panel.querySelector('[data-gallery-blurb]')!.textContent = van.blurb;
+      showPhoto();
+    }
+
+    const FOCUSABLE =
+      'a[href], button:not([hidden]), input, textarea, select, [tabindex]:not([tabindex="-1"])';
+
+    function open(id: string, from: HTMLElement) {
+      vanId = id;
+      index = 0;
+      lastFocus = from;
+      fillPanel(id);
+      gallery!.hidden = false;
+
+      // Lock the page without losing where it was. `overflow: hidden` alone
+      // silently drops scroll position on iOS, and on this project the page
+      // moving on its own is the one thing that must never happen.
+      scrollYBeforeOpen = window.scrollY;
+      document.body.style.position = 'fixed';
+      document.body.style.top = `-${scrollYBeforeOpen}px`;
+      document.body.style.left = '0';
+      document.body.style.right = '0';
+      document.body.style.width = '100%';
+
+      const first = panel!.querySelector<HTMLElement>(FOCUSABLE);
+      (first ?? panel!).focus?.();
+    }
+
+    function close() {
+      gallery!.hidden = true;
+      document.body.style.position = '';
+      document.body.style.top = '';
+      document.body.style.left = '';
+      document.body.style.right = '';
+      document.body.style.width = '';
+      // Restore exactly, and without smooth-scrolling to it.
+      const behavior = document.documentElement.style.scrollBehavior;
+      document.documentElement.style.scrollBehavior = 'auto';
+      window.scrollTo(0, scrollYBeforeOpen);
+      document.documentElement.style.scrollBehavior = behavior;
+      lastFocus?.focus?.();
+      lastFocus = null;
+    }
+
+    for (const btn of section.querySelectorAll<HTMLButtonElement>('[data-van-open]')) {
+      btn.addEventListener('click', () => open(btn.dataset.vanOpen!, btn));
+    }
+    for (const el of gallery.querySelectorAll<HTMLElement>('[data-gallery-close]')) {
+      el.addEventListener('click', close);
+    }
+    prevBtn.addEventListener('click', () => step(-1));
+    nextBtn.addEventListener('click', () => step(1));
+
+    document.addEventListener('keydown', (e) => {
+      if (gallery!.hidden) return;
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        close();
+        return;
+      }
+      if (e.key === 'ArrowLeft') step(-1);
+      if (e.key === 'ArrowRight') step(1);
+      if (e.key !== 'Tab') return;
+
+      // Trap focus: the dialog is modal, so Tab must not reach the page behind.
+      const items = Array.from(panel!.querySelectorAll<HTMLElement>(FOCUSABLE)).filter(
+        (el) => !el.hidden && el.offsetParent !== null
+      );
+      if (!items.length) return;
+      const first = items[0];
+      const last = items[items.length - 1];
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    });
+
+    // Swipe between photographs on touch.
+    let touchX = 0;
+    const stage = panel.querySelector<HTMLElement>('.gallery-stage')!;
+    stage.addEventListener('touchstart', (e) => (touchX = e.touches[0].clientX), { passive: true });
+    stage.addEventListener(
+      'touchend',
+      (e) => {
+        const dx = e.changedTouches[0].clientX - touchX;
+        if (Math.abs(dx) > 45) step(dx < 0 ? 1 : -1);
+      },
+      { passive: true }
+    );
+
+    // ---- enquiry ---------------------------------------------------------
+    panel.querySelector<HTMLFormElement>('[data-gallery-form]')!.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const form = e.currentTarget as HTMLFormElement;
+      const data = new FormData(form);
+      const s = t();
+      const van = vanById(vanId);
+      const subject = `${s.subject} — ${van?.name ?? ''} — ${data.get('from')} to ${data.get('to')}`;
+      const lines = [
+        s.greeting,
+        '',
+        `${s.intro} ${van?.name ?? 'a van'}.`,
+        '',
+        `${s.dates}: ${data.get('from')} → ${data.get('to')}`,
+        `${s.nameLabel}: ${data.get('name')}`,
+        data.get('notes') ? `\n${s.more}:\n${data.get('notes')}` : '',
+      ];
+      window.location.href = `mailto:${EMAIL}?subject=${encodeURIComponent(
+        subject
+      )}&body=${encodeURIComponent(lines.join('\n'))}`;
+    });
+
+    applyLang();
+    applyMode();
+  }
+
+  initFleet();
+</script>

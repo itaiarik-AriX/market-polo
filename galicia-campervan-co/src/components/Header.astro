@@ -1,7 +1,5 @@
 ---
-// Third-party booking lives off-site; single source of truth for the link is
-// Enquire.astro. Kept in sync by hand — it is one URL in two places.
-const BOOKING_URL = '#';
+import { BOOKING_URL } from '../lib/site';
 ---
 <header class="site-header">
   <div class="header-inner">
@@ -93,6 +91,27 @@ const BOOKING_URL = '#';
 
   .lang-btn:hover {
     color: var(--accent);
+  }
+
+  /* Over a light band (the fleet), the cream text and its dark text-shadow both
+     stop working. Swap to dark ink for the duration. The mode toggle is exempt:
+     it carries its own dark glass background, so it reads on either ground. */
+  .site-header.on-light .lang-btn {
+    color: rgba(36, 26, 18, 0.6);
+  }
+  .site-header.on-light .lang-btn[aria-selected='true'],
+  .site-header.on-light .lang-btn:hover {
+    color: var(--accent-deep);
+  }
+  .site-header.on-light .lang-btn:first-child::after {
+    background: rgba(36, 26, 18, 0.22);
+  }
+  .site-header.on-light .book-link {
+    color: #241a12;
+    text-shadow: none;
+  }
+  .site-header.on-light .book-link:hover {
+    color: var(--accent-deep);
   }
 
   /* Plain text, no chrome — the toggle is the only object in the header, and a
@@ -230,5 +249,53 @@ const BOOKING_URL = '#';
     setActive('hire');
   }
 
+  // Flip the header to dark ink while it overlaps a light band. Done with an
+  // IntersectionObserver rather than a scroll listener on purpose: this page's
+  // whole character is a scroll-scrubbed canvas, and adding per-scroll work to
+  // support a colour swap would be a bad trade. The observer's root is squeezed
+  // to a thin strip at the header's own height, so it fires exactly when a
+  // light section arrives under the header rather than when it enters view.
+  function initHeaderContrast() {
+    const header = document.querySelector<HTMLElement>('.site-header');
+    const lights = document.querySelectorAll<HTMLElement>('[data-light-section]');
+    if (!header || !lights.length) return;
+
+    let observer: IntersectionObserver | null = null;
+    const overlapping = new Set<Element>();
+
+    function build() {
+      observer?.disconnect();
+      overlapping.clear();
+      const strip = Math.max(1, header!.getBoundingClientRect().height);
+      observer = new IntersectionObserver(
+        (entries) => {
+          for (const e of entries) {
+            // A hidden section reports zero size and would otherwise latch on.
+            if (e.isIntersecting && (e.target as HTMLElement).offsetParent !== null) {
+              overlapping.add(e.target);
+            } else {
+              overlapping.delete(e.target);
+            }
+          }
+          header!.classList.toggle('on-light', overlapping.size > 0);
+        },
+        { rootMargin: `0px 0px ${-(window.innerHeight - strip)}px 0px`, threshold: 0 }
+      );
+      for (const el of lights) observer.observe(el);
+    }
+
+    build();
+    // The strip is measured in pixels, so it has to be rebuilt when the
+    // viewport height changes.
+    let resizeTimer = 0;
+    window.addEventListener('resize', () => {
+      clearTimeout(resizeTimer);
+      resizeTimer = window.setTimeout(build, 150);
+    });
+    // Sections hide and show with the mode toggle; re-evaluate when that happens.
+    document.addEventListener('mode-change', () => setTimeout(build, 0));
+  }
+
   initToggles();
+  initHeaderContrast();
 </script>

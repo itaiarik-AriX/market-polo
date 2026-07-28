@@ -2,11 +2,12 @@
 import '../styles/global.css';
 import Header from '../components/Header.astro';
 import Hero from '../components/Hero.astro';
+import Fleet from '../components/Fleet.astro';
 import Enquire from '../components/Enquire.astro';
 import Cursor from '../components/Cursor.astro';
+import { EMAIL } from '../lib/site';
 
 const YEAR = new Date().getFullYear();
-const EMAIL = 'itaiarik@gmail.com';
 ---
 
 <!DOCTYPE html>
@@ -30,6 +31,9 @@ const EMAIL = 'itaiarik@gmail.com';
   <Header />
   <main>
     <Hero />
+    {/* Exactly one of these is ever visible: Fleet in Hire, Enquire in Build.
+        Each hides itself on the mode-change event. */}
+    <Fleet />
     <Enquire />
   </main>
   <footer>

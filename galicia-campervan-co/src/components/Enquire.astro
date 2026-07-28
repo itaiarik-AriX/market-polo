@@ -1,111 +1,19 @@
 ---
-const EMAIL = 'itaiarik@gmail.com';
-// Booking happens on a third-party site. Placeholder until the real link
-// arrives — swapping it is a one-line change here and one in Header.astro.
-const BOOKING_URL = '#';
+import { EMAIL } from '../lib/site';
 
-// Language-specific content for the enquire section
-const content = {
-  en: {
-    eyebrow: '— Enquire',
-    hire: {
-      title: 'Ready when you are.',
-      subtitle: 'Live dates and instant booking, handled by our booking partner.',
-      cta: 'Check availability',
-      divider: 'Rather ask us first?',
-      submit: 'Send enquiry',
-      labels: {
-        from: 'From',
-        to: 'To',
-        name: 'Your name',
-        notes: 'Anything we should know?',
-        placeholder_notes: "Where you're dreaming of going, how many of you…",
-      },
-    },
-    build: {
-      title: 'Tell us about your build.',
-      subtitle: "Whether it's a bare van or a tired camper that needs a new life — start the conversation and we'll reply personally.",
-      labels: {
-        name: 'Your name',
-        base: 'What are you starting with?',
-        placeholder_base: 'e.g. a 2019 Transporter, an old T2 that needs love…',
-        notes: 'What do you have in mind?',
-        placeholder_notes: 'Full conversion, renovation, something in between…',
-      },
-      submit: 'Start the conversation',
-    },
-  },
-  es: {
-    eyebrow: '— Enquire',
-    hire: {
-      title: 'Ready when you are.',
-      subtitle: 'Live dates and instant booking, handled by our booking partner.',
-      cta: 'Check availability',
-      divider: 'Rather ask us first?',
-      submit: 'Send enquiry',
-      labels: {
-        from: 'From',
-        to: 'To',
-        name: 'Your name',
-        notes: 'Anything we should know?',
-        placeholder_notes: "Where you're dreaming of going, how many of you…",
-      },
-    },
-    build: {
-      title: 'Tell us about your build.',
-      subtitle: "Whether it's a bare van or a tired camper that needs a new life — start the conversation and we'll reply personally.",
-      labels: {
-        name: 'Your name',
-        base: 'What are you starting with?',
-        placeholder_base: 'e.g. a 2019 Transporter, an old T2 that needs love…',
-        notes: 'What do you have in mind?',
-        placeholder_notes: 'Full conversion, renovation, something in between…',
-      },
-      submit: 'Start the conversation',
-    },
-  },
-};
+// Build-only now. The hire panel — booking CTA and hire enquiry form — moved
+// into the fleet gallery overlay (Fleet.astro), so a visitor picks a van before
+// asking about it. BOOKING_URL moved to src/lib/site.ts, which is also what
+// Header.astro reads.
 ---
-<section class="enquire" id="enquire">
+<section class="enquire" id="enquire" data-enquire-section hidden>
   <div class="enquire-inner">
     <p class="eyebrow" data-enquire-eyebrow>— Enquire</p>
 
-    <div data-enquire-panel="hire">
-      <h2 class="serif">Ready when you are.</h2>
-      <p class="lede">Live dates and instant booking, handled by our booking partner.</p>
-
-      <a
-        class="book-cta"
-        href={BOOKING_URL}
-        target="_blank"
-        rel="noopener noreferrer"
-      >Check availability <span aria-hidden="true">&rarr;</span></a>
-
-      <div class="or-rule"><span>Rather ask us first?</span></div>
-
-      <form class="enquiry-form" data-enquiry-form="hire">
-        <div class="field-row">
-          <label>
-            From
-            <input type="date" name="from" required />
-          </label>
-          <label>
-            To
-            <input type="date" name="to" required />
-          </label>
-        </div>
-        <label>
-          Your name
-          <input type="text" name="name" required autocomplete="name" />
-        </label>
-        <label>
-          Anything we should know? <span class="optional">(optional)</span>
-          <textarea name="notes" rows="3" placeholder="Where you're dreaming of going, how many of you…"></textarea>
-        </label>
-        <button type="submit" class="submit-btn is-secondary">Send enquiry &rarr;</button>
-      </form>
-    </div>
-
+    {/* Hire has no panel here any more: booking and the hire enquiry form both
+        moved into the fleet gallery overlay, so you pick a van before you ask
+        about it. See Fleet.astro. This section is Build-only now, and hides
+        itself entirely in Hire. */}
     <div data-enquire-panel="build" hidden>
       <h2 class="serif">Tell us about your build.</h2>
       <p class="lede">Whether it's a bare van or a tired camper that needs a new life — start the conversation and we'll reply personally.</p>
@@ -159,11 +67,6 @@ const content = {
     gap: 1.4rem;
     text-align: left;
   }
-  .field-row {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 1.4rem;
-  }
   label {
     display: flex;
     flex-direction: column;
@@ -192,43 +95,7 @@ const content = {
     outline: none;
     border-color: var(--accent);
   }
-  /* Booking is the one loud action on the page. */
-  .book-cta {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.5rem;
-    background: var(--accent);
-    color: #1a1206;
-    border-radius: 999px;
-    font-weight: 500;
-    font-size: 1.05rem;
-    padding: 1rem 2.4rem;
-    min-height: 52px;
-    transition: background 0.25s ease, transform 0.25s ease;
-  }
-  .book-cta:hover {
-    background: var(--accent-deep);
-    transform: translateY(-1px);
-  }
-
-  /* Divider that demotes what follows without hiding it. */
-  .or-rule {
-    display: flex;
-    align-items: center;
-    gap: 1rem;
-    margin: 3rem 0 2rem;
-    color: var(--fg-dim);
-    font-size: 0.82rem;
-    letter-spacing: 0.04em;
-  }
-  .or-rule::before,
-  .or-rule::after {
-    content: '';
-    flex: 1;
-    height: 1px;
-    background: var(--rule);
-  }
-
+  /* Build's form IS the primary action here, so it keeps the solid treatment. */
   .submit-btn {
     margin-top: 0.5rem;
     align-self: center;
@@ -248,119 +115,66 @@ const content = {
     background: var(--accent-deep);
     transform: translateY(-1px);
   }
-  /* Outlined, so it reads as the quieter of the two paths. Build keeps the
-     solid version, since there the form IS the primary action. */
-  .submit-btn.is-secondary {
-    background: transparent;
-    color: var(--fg);
-    border: 1px solid var(--rule-strong);
-  }
-  .submit-btn.is-secondary:hover {
-    background: transparent;
-    border-color: var(--accent);
-    color: var(--accent);
-  }
-
   @media (max-width: 640px) {
     .enquire {
       padding: 5rem 1.25rem calc(5rem + env(safe-area-inset-bottom, 0));
-    }
-    .field-row {
-      grid-template-columns: 1fr;
     }
   }
 </style>
 
 <script define:vars={{ EMAIL }}>
   // Compose a pre-filled mailto enquiry — no backend needed.
+  // Build only: the hire equivalent lives in Fleet.astro's gallery overlay, so
+  // that a hire enquiry can name the van it is about.
   function initEnquiry() {
+    const section = document.querySelector('[data-enquire-section]');
     let currentLang = localStorage.getItem('lang') || 'en';
 
     const emailStrings = {
       en: {
-        hire: {
-          subject: 'Hire enquiry',
-          greeting: 'Hi Coruña Campervan,',
-          intro: "I'd like to enquire about hiring the campervan.",
-          dates: 'Dates',
-          name: 'Name',
-          more: 'A bit more about the trip',
-        },
-        build: {
-          subject: 'Build enquiry',
-          greeting: 'Hi Coruña Campervan,',
-          intro: "I'd like to talk about a build.",
-          name: 'Name',
-          base: 'Starting point',
-          more: 'What I have in mind',
-        },
-      },
-      es: {
-        hire: {
-          subject: 'Hire enquiry',
-          greeting: 'Hi Coruña Campervan,',
-          intro: "I'd like to enquire about hiring the campervan.",
-          dates: 'Dates',
-          name: 'Name',
-          more: 'A bit more about the trip',
-        },
-        build: {
-          subject: 'Build enquiry',
-          greeting: 'Hi Coruña Campervan,',
-          intro: "I'd like to talk about a build.",
-          name: 'Name',
-          base: 'Starting point',
-          more: 'What I have in mind',
-        },
+        subject: 'Build enquiry',
+        greeting: 'Hi Coruña Campervan,',
+        intro: "I'd like to talk about a build.",
+        name: 'Name',
+        base: 'Starting point',
+        more: 'What I have in mind',
       },
     };
+    emailStrings.es = emailStrings.en;
 
-    document.addEventListener('mode-change', (e) => {
-      const { mode } = e.detail;
+    // The whole section is Build's now — in Hire the fleet takes its place.
+    function applyMode(mode) {
+      if (section) section.hidden = mode !== 'build';
       document.querySelectorAll('[data-enquire-panel]').forEach((panel) => {
         panel.hidden = panel.dataset.enquirePanel !== mode;
       });
-    });
+    }
 
+    document.addEventListener('mode-change', (e) => applyMode(e.detail.mode));
     document.addEventListener('language-change', (e) => {
-      const { lang } = e.detail;
-      currentLang = lang;
+      currentLang = e.detail.lang;
     });
 
     document.querySelectorAll('[data-enquiry-form]').forEach((form) => {
       form.addEventListener('submit', (e) => {
         e.preventDefault();
-        const mode = form.dataset.enquiryForm;
         const data = new FormData(form);
-        const strings = emailStrings[currentLang] || emailStrings.en;
-        let subject, lines;
-        if (mode === 'hire') {
-          subject = `${strings.hire.subject} — ${data.get('from')} to ${data.get('to')}`;
-          lines = [
-            strings.hire.greeting,
-            '',
-            strings.hire.intro,
-            '',
-            `${strings.hire.dates}: ${data.get('from')} → ${data.get('to')}`,
-            `${strings.hire.name}: ${data.get('name')}`,
-            data.get('notes') ? `\n${strings.hire.more}:\n${data.get('notes')}` : '',
-          ];
-        } else {
-          subject = `${strings.build.subject} from ${data.get('name')}`;
-          lines = [
-            strings.build.greeting,
-            '',
-            strings.build.intro,
-            '',
-            `${strings.build.name}: ${data.get('name')}`,
-            `${strings.build.base}: ${data.get('base')}`,
-            data.get('notes') ? `\n${strings.build.more}:\n${data.get('notes')}` : '',
-          ];
-        }
-        const href = `mailto:${EMAIL}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(lines.join('\n'))}`;
-        window.location.href = href;
+        const s = emailStrings[currentLang] || emailStrings.en;
+        const subject = `${s.subject} from ${data.get('name')}`;
+        const lines = [
+          s.greeting,
+          '',
+          s.intro,
+          '',
+          `${s.name}: ${data.get('name')}`,
+          `${s.base}: ${data.get('base')}`,
+          data.get('notes') ? `\n${s.more}:\n${data.get('notes')}` : '',
+        ];
+        window.location.href = `mailto:${EMAIL}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(lines.join('\n'))}`;
       });
     });
+
+    applyMode('hire');
   }
 
   initEnquiry();
