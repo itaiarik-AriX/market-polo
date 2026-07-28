@@ -44,17 +44,17 @@ const copy: Record<string, Record<string, VanCopy>> = {
   en: {
     nomad: {
       name: 'Nomad',
-      status: 'Available for rent',
+      status: 'Taking bookings',
       blurb:
-        'Our first van, and still the one we would take ourselves. Sleeps two, cooks properly, and gets you somewhere with a view.',
+        "Our first, and still the one we'd take ourselves. Sleeps two, cooks properly, and gets you somewhere with a view.",
     },
   },
   es: {
     nomad: {
       name: 'Nomad',
-      status: 'Available for rent',
+      status: 'Taking bookings',
       blurb:
-        'Our first van, and still the one we would take ourselves. Sleeps two, cooks properly, and gets you somewhere with a view.',
+        "Our first, and still the one we'd take ourselves. Sleeps two, cooks properly, and gets you somewhere with a view.",
     },
   },
 };
