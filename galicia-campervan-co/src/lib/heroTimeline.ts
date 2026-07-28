@@ -20,6 +20,17 @@ export interface Section {
   hold: number;
   /** relative scroll span of the motion leading INTO this hold (ignored for the first section) */
   motion: number;
+  /**
+   * Optional ambient loop played while resting on this station, so the scene is
+   * alive (waves rolling, grass moving) rather than a frozen frame. Path without
+   * extension — `.mp4` and `.webm` are both expected, e.g. '/loops/welcome'.
+   *
+   * The clip MUST open on this section's `frame`, which is what the canvas holds
+   * on: the crossfade then happens between the loop and an identical still image
+   * while nothing else is moving, which is what makes the handover invisible.
+   * Generate it from the matching plate in docs/station-plates/.
+   */
+  loop?: string;
 }
 
 export interface ModeTimeline {
@@ -53,6 +64,8 @@ export const timelines: Record<string, ModeTimeline> = {
       // `hold` = how much scroll distance is spent paused here reading the copy;
       // `motion` = how much scroll distance the move INTO this station takes
       // (bigger = slower/more cinematic). Both are relative weights — tune freely.
+      // To switch the ambient loop on, drop the encoded clip in as
+      // public/loops/welcome.{mp4,webm} and add: loop: '/loops/welcome'
       { id: 'welcome', frame: 0, hold: 1.1, motion: 0 },
       { id: 'exterior', frame: 81, hold: 1.2, motion: 2.4 },
       { id: 'amenities', frame: 227, hold: 1.2, motion: 3.0 },

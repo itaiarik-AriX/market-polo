@@ -14,6 +14,27 @@ const stationStills = Object.entries(timelines).flatMap(([mode, tl]) =>
     : []
 );
 
+// Ambient loops, for the stations that declare one (see Section.loop). The clip
+// opens on the same frame the canvas holds on, so it can crossfade against an
+// identical image rather than against motion.
+const stationLoops = Object.entries(timelines).flatMap(([mode, tl]) =>
+  tl.sections
+    .filter((s) => s.loop)
+    .map((s) => ({
+      mode,
+      id: s.id,
+      src: s.loop!,
+      // Poster is that station's own still, so there is never a blank frame
+      // while the clip arrives — and it is already being fetched for the
+      // .station-still layer, so it costs nothing extra.
+      poster: tl.stationsBase
+        ? `${tl.stationsBase}${s.id}.${tl.stationsExt ?? tl.ext}`
+        : undefined,
+      // Only the station the page lands on is worth fetching up front.
+      eager: tl.sections[0].id === s.id,
+    }))
+);
+
 // Copy is keyed by section id (see src/lib/heroTimeline.ts). Each block fades in
 // while the sequence holds on that section's frame.
 const copy = {
@@ -88,6 +109,24 @@ const copy = {
           loading="eager"
           decoding="async"
         />
+      ))}
+    </div>
+
+    <div class="hero-loops" aria-hidden="true">
+      {stationLoops.map((lp) => (
+        <video
+          class="station-loop"
+          data-loop-mode={lp.mode}
+          data-loop-id={lp.id}
+          poster={lp.poster}
+          preload={lp.eager ? 'auto' : 'metadata'}
+          muted
+          loop
+          playsinline
+        >
+          <source src={`${lp.src}.webm`} type="video/webm" />
+          <source src={`${lp.src}.mp4`} type="video/mp4" />
+        </video>
       ))}
     </div>
 
@@ -177,6 +216,23 @@ const copy = {
     opacity: 0;
     will-change: opacity;
   }
+  /* Ambient station loops, layered directly over the stills with identical
+     cover geometry so the two are pixel-aligned and can crossfade cleanly. */
+  .hero-loops {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+  }
+  .station-loop {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    opacity: 0;
+    will-change: opacity;
+  }
+
   .hero-vignette {
     position: absolute;
     inset: 0;
@@ -344,7 +400,20 @@ const copy = {
     const scrollCue = document.querySelector<HTMLElement>('[data-scroll-cue]');
     const blocks = Array.from(document.querySelectorAll<HTMLElement>('.copy-block'));
     const stills = Array.from(document.querySelectorAll<HTMLElement>('.station-still'));
+    let loops = Array.from(document.querySelectorAll<HTMLVideoElement>('.station-loop'));
     if (!canvas || !track) return;
+
+    // The loops are decoration. Drop them entirely when the visitor has asked
+    // for less motion, or when the browser reports a metered or slow connection
+    // — the sharp stills underneath already carry every station on their own.
+    const conn = (navigator as any).connection;
+    const ambientWanted =
+      !window.matchMedia('(prefers-reduced-motion: reduce)').matches &&
+      !(conn && (conn.saveData || /(^|\W)(slow-)?2g$/.test(conn.effectiveType ?? '')));
+    if (!ambientWanted) {
+      for (const v of loops) v.remove();
+      loops = [];
+    }
 
     // Fade a section's copy/still in over the first slice of its hold and out over the last.
     const EDGE = 0.28; // fraction of each hold used for the fade in/out
@@ -353,8 +422,14 @@ const copy = {
       if (p < start || p > end) return 0;
       const span = end - start;
       const edge = span * EDGE;
-      if (p < start + edge) return (p - start) / edge;
-      if (p > end - edge) return (end - p) / edge;
+      // A hold pinned to either end of the timeline has nothing to fade from or
+      // to: progress 0 is where the page loads and 1 is where it ends. Ramping
+      // there would leave the first station's copy — and its ambient loop —
+      // invisible on arrival, appearing only once the visitor starts scrolling.
+      const atStart = start <= 1e-6;
+      const atEnd = end >= 1 - 1e-6;
+      if (!atStart && p < start + edge) return (p - start) / edge;
+      if (!atEnd && p > end - edge) return (end - p) / edge;
       return 1;
     }
 
@@ -390,8 +465,41 @@ const copy = {
           const r = rangeById[still.dataset.stillId!];
           still.style.opacity = r ? String(opacityForRange(progress, r.start, r.end)) : '0';
         }
+
+        // Ambient loop rides the same curve as its still, so the handover is a
+        // pure function of scroll position — scroll back up mid-fade and it
+        // fades back in. Nothing animates on its own, nothing to wait out.
+        for (const v of loops) {
+          if (v.dataset.loopMode !== mode) {
+            v.style.opacity = '0';
+            stopLoop(v);
+            continue;
+          }
+          const r = rangeById[v.dataset.loopId!];
+          const o = r ? opacityForRange(progress, r.start, r.end) : 0;
+          v.style.opacity = String(o);
+          // Decode only while it is actually visible: by the time the canvas
+          // starts scrubbing, every loop is paused.
+          if (o > 0) startLoop(v);
+          else stopLoop(v);
+        }
       },
     });
+
+    // play()/pause() are async and interrupt each other if called while one is
+    // still settling, so gate on our own intent rather than on v.paused.
+    function startLoop(v: HTMLVideoElement) {
+      if (v.dataset.playing === '1') return;
+      v.dataset.playing = '1';
+      // A rejection here just means autoplay was refused; the poster and the
+      // still underneath already show the right frame, so there is nothing to do.
+      v.play().catch(() => {});
+    }
+    function stopLoop(v: HTMLVideoElement) {
+      if (v.dataset.playing !== '1') return;
+      v.dataset.playing = '';
+      v.pause();
+    }
 
     document.addEventListener('mode-change', (e: Event) => {
       const { mode } = (e as CustomEvent).detail;
