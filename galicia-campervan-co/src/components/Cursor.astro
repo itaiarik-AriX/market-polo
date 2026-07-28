@@ -5,16 +5,23 @@
 // Three nested elements on purpose, so the three transforms never fight:
 //   .cursor      — position, driven by JS every frame
 //   .cursor-rot  — heading, driven by JS every frame
+//   .cursor-spin — the over-a-control spin, a CSS animation
 //   .cursor-art  — scale, driven by CSS classes so it can transition
+//
+// The spin needs its own layer: a CSS animation on `transform` replaces the
+// whole property, so putting it on either of the layers above would wipe out
+// the heading or the scale for as long as it ran.
 ---
 <div class="cursor" data-cursor aria-hidden="true">
   <div class="cursor-rot" data-cursor-rot>
-    <div class="cursor-art">
-      <svg viewBox="0 0 24 24" fill="none">
-        <circle cx="12" cy="12" r="10.4" stroke="currentColor" stroke-width="1.1" opacity="0.55" />
-        <path d="M12 3.6 L15 12 L12 20.4 L9 12 Z" fill="currentColor" />
-        <circle cx="12" cy="12" r="1.5" fill="var(--bg)" />
-      </svg>
+    <div class="cursor-spin">
+      <div class="cursor-art">
+        <svg viewBox="0 0 24 24" fill="none">
+          <circle class="compass-ring" cx="12" cy="12" r="10.4" stroke="currentColor" stroke-width="1.1" opacity="0.55" />
+          <path d="M12 3.6 L15 12 L12 20.4 L9 12 Z" fill="currentColor" />
+          <circle cx="12" cy="12" r="1.5" fill="var(--bg)" />
+        </svg>
+      </div>
     </div>
   </div>
 </div>
@@ -23,9 +30,14 @@
   /* Only ever set once the script has confirmed a fine pointer — a touch device
      must keep its native behaviour, and a visitor who has not moved a mouse yet
      should not have their cursor taken away. */
+  /* !important is load-bearing, not laziness. Astro scopes a component rule
+     like `.mode-btn { cursor: pointer }` to `.mode-btn[data-astro-cid-…]`,
+     specificity (0,2,0) — which outranks anything reasonable this selector can
+     reach. Without it the hand still appears over every control, and any
+     `cursor:` added anywhere later would silently reintroduce it. */
   html.has-compass-cursor,
   html.has-compass-cursor * {
-    cursor: none;
+    cursor: none !important;
   }
   /* Text entry is the one place the native cursor carries information the
      compass cannot: where the caret will land. Give the I-beam back, and the
@@ -33,7 +45,7 @@
   html.has-compass-cursor input,
   html.has-compass-cursor textarea,
   html.has-compass-cursor select {
-    cursor: auto;
+    cursor: auto !important;
   }
 </style>
 
@@ -86,6 +98,36 @@
     transform: scale(1.1);
   }
 
+  /* Over something clickable the needle loses its bearing and spins, the way a
+     compass does near metal. That reads as "this does something" without
+     needing a second shape, and it happens where the pointer already is. */
+  .cursor-spin {
+    will-change: transform;
+  }
+  .cursor.is-hot .cursor-spin {
+    animation: compass-spin 0.85s linear infinite;
+  }
+  @keyframes compass-spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
+  /* The dial brightens in time with the spin, so the whole mark pulses as one
+     object rather than a spinning needle inside a static ring. */
+  .cursor.is-hot .compass-ring {
+    animation: compass-ring-pulse 0.85s ease-in-out infinite;
+  }
+  @keyframes compass-ring-pulse {
+    0%,
+    100% {
+      opacity: 0.4;
+    }
+    50% {
+      opacity: 1;
+    }
+  }
+
   /* The compass is decoration built entirely out of motion. With motion turned
      down there is nothing left worth taking the system cursor away for, so the
      script never activates — this is only a belt-and-braces guard. */
@@ -123,6 +165,7 @@
     let raf = 0;
     let settleTimer = 0;
     let started = false;
+    let hot = false;
 
     const TEXTUAL = 'input, textarea, select';
     const CLICKABLE = 'a, button, [role="tab"], label, summary, [data-nav-jump]';
@@ -151,7 +194,12 @@
       const dy = fy - py;
       const speed = Math.hypot(dx, dy);
 
-      if (speed > MOVE_EPS) {
+      if (hot) {
+        // While the spin layer is running, the heading stands down and returns
+        // to north. Two live rotations on the same mark read as a wobble, not
+        // as a spin.
+        target = Math.round(angle / 360) * 360;
+      } else if (speed > MOVE_EPS) {
         // +90 because the needle points up at 0°, while atan2 measures from east.
         target = (Math.atan2(dy, dx) * 180) / Math.PI + 90;
         lastMove = performance.now();
@@ -223,7 +271,14 @@
       const t = e.target as Element | null;
       if (!t || !t.closest) return;
       el!.classList.toggle('is-text', !!t.closest(TEXTUAL));
-      el!.classList.toggle('is-hot', !!t.closest(CLICKABLE));
+      const nowHot = !!t.closest(CLICKABLE);
+      if (nowHot !== hot) {
+        hot = nowHot;
+        // Entering resets the heading to north; leaving hands the needle back
+        // to direction-of-travel. Both need a frame to run.
+        wake();
+      }
+      el!.classList.toggle('is-hot', hot);
     });
 
     document.addEventListener('pointerdown', () => el!.classList.add('is-down'));
