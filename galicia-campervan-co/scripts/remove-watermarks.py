@@ -20,6 +20,10 @@ looking, after earlier versions of this script shipped visible residue:
     boundary, so a mask stopping inside a glyph feeds white back in and redraws
     it. Bright-edge residue on frame 362, against a 2.2% scene-detail floor:
     3.99% at 15px, 2.53% at 21, 2.36% at 25. Shipping 25.
+3a. The sparkle threshold is 0.45, not 0.55. At 0.55 twelve frames scored
+    0.503-0.550 and kept a plainly visible star. Its search is capped at frame
+    150 because the sparkle demonstrably ends near 147 (148-176 checked clean),
+    which is what makes the lower threshold safe from false positives.
 3.  Marks are located per frame by TEMPLATE MATCHING, not by brightness.
     Brightness cannot tell a white glyph from sunlit grass or a wicker basket:
     an earlier version painted only 95 of the sparkle's ~145 frames, and put
@@ -65,7 +69,7 @@ INPAINT_RADIUS = 12
 # delicate settings.
 TRACKED = [
     ('ltx',     (1560, 900, 1870, 1080), (295, 457), (0, 457), 0.50),
-    ('sparkle', (1650, 830, 1920, 1010), (0, 140),   (0, 190), 0.55),
+    ('sparkle', (1650, 830, 1920, 1010), (0, 140),   (0, 150), 0.45),
 ]
 
 # "Veo" is ~40x30px hard against the bottom-right corner — too small and too
@@ -150,11 +154,13 @@ def paint(img_rgb, mask, radius):
         cv2.COLOR_BGR2RGB)
 
 
-def extract(src, w, out_dir):
-    subprocess.run(
-        ['ffmpeg', '-v', 'error', '-i', src,
-         '-vf', f'fps={FPS},scale={w}:-2', '-c:v', 'png',
-         '-y', os.path.join(out_dir, '%04d.png')], check=True)
+def extract(src, w, out_dir, limit=0):
+    cmd = ['ffmpeg', '-v', 'error', '-i', src,
+           '-vf', f'fps={FPS},scale={w}:-2', '-c:v', 'png']
+    if limit:
+        cmd += ['-frames:v', str(limit)]
+    cmd += ['-y', os.path.join(out_dir, '%04d.png')]
+    subprocess.run(cmd, check=True)
     return sorted(glob.glob(os.path.join(out_dir, '*.png')))
 
 
@@ -162,6 +168,9 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--dry-run', action='store_true')
     ap.add_argument('--only', default='hire,hire-sm,stations')
+    # Reprocess just the first N frames. Useful when only an early mark's
+    # calibration changed - there is no point re-encoding 900 files to fix 12.
+    ap.add_argument('--limit', type=int, default=0)
     args = ap.parse_args()
     want = set(args.only.split(','))
 
@@ -170,10 +179,11 @@ def main():
 
     ref_tmp = tempfile.mkdtemp(prefix='wm-ref-')
     print(f'extracting reference frames at {REF_W}px…', flush=True)
-    files = extract(SRC, REF_W, ref_tmp)
-    if len(files) != N_FRAMES:
+    files = extract(SRC, REF_W, ref_tmp, args.limit)
+    if len(files) != (args.limit or N_FRAMES):
         shutil.rmtree(ref_tmp, ignore_errors=True)
-        sys.exit(f'expected {N_FRAMES} reference frames, found {len(files)}')
+        sys.exit(f'expected {args.limit or N_FRAMES} reference frames, '
+                 f'found {len(files)}')
 
     # ---- locate every mark, per frame --------------------------------------
     per_frame = {}
@@ -189,7 +199,13 @@ def main():
         union[y:y + h, x:x + w] = np.maximum(union[y:y + h, x:x + w], shape)
 
     for name, box, (llo, lhi), (slo, shi), corr in TRACKED:
-        tpl, shape = build_template(files, box, llo, lhi)
+        # With --limit, a mark that lives later in the clip has nothing to learn
+        # from and nothing to find. Skip it rather than crash: its frames are
+        # outside the range being rewritten anyway.
+        if llo >= len(files) or slo >= len(files):
+            print(f'  {name:8s} outside --limit range, skipped', flush=True)
+            continue
+        tpl, shape = build_template(files, box, llo, min(lhi, len(files)))
         if tpl is None:
             sys.exit(f'{name}: could not build a template')
         hits = track(files, box, tpl, corr, slo, shi)
@@ -225,9 +241,10 @@ def main():
                 made = files
             else:
                 print(f'\n{tier}: extracting {w}px as PNG…', flush=True)
-                made = extract(SRC, w, tmp)
-                if len(made) != N_FRAMES:
-                    sys.exit(f'{tier}: got {len(made)} frames, expected {N_FRAMES}')
+                made = extract(SRC, w, tmp, args.limit)
+                if len(made) != (args.limit or N_FRAMES):
+                    sys.exit(f'{tier}: got {len(made)} frames, '
+                             f'expected {args.limit or N_FRAMES}')
             print(f'{tier}: painting {len(masks)} of {len(made)}…', flush=True)
             for n, p in enumerate(made):
                 idx = int(os.path.basename(p)[:4]) - 1
