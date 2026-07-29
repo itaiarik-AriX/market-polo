@@ -7,11 +7,17 @@ import { timelines, buildTimeline } from '../lib/heroTimeline';
 // `portraitSrc` is the same station recut 9:16, matching basePathPortrait. The
 // browser picks between them from the media query on the <source>, so the still
 // can never disagree with the frames the scrubber loaded.
+// `eager` is the first station of each mode — the only still on screen when the
+// page opens. The rest are attached as their station approaches (see
+// attachStill), because loading all five up front cost 3.0MB of which 2.4MB was
+// invisible, and that traffic competed with both the still the visitor IS
+// looking at and the scrub frames behind it.
 const stationStills = Object.entries(timelines).flatMap(([mode, tl]) =>
   tl.stationsBase
-    ? tl.sections.map((s) => ({
+    ? tl.sections.map((s, i) => ({
         mode,
         id: s.id,
+        eager: i === 0,
         src: `${tl.stationsBase}${s.id}.${tl.stationsExt ?? tl.ext}`,
         portraitSrc: tl.stationsBasePortrait
           ? `${tl.stationsBasePortrait}${s.id}.${tl.stationsExt ?? tl.ext}`
@@ -39,6 +45,9 @@ const stationLoops = Object.entries(timelines).flatMap(([mode, tl]) =>
       // .station-still layer, so it costs nothing extra.
       poster: tl.stationsBase
         ? `${tl.stationsBase}${s.id}.${tl.stationsExt ?? tl.ext}`
+        : undefined,
+      posterPortrait: tl.stationsBasePortrait
+        ? `${tl.stationsBasePortrait}${s.id}.${tl.stationsExt ?? tl.ext}`
         : undefined,
       // Only the station the page lands on is worth fetching up front.
       eager: tl.sections[0].id === s.id,
@@ -286,18 +295,41 @@ const copy = {
 
     <div class="hero-stills" aria-hidden="true">
       {stationStills.map((st) => (
-        <picture>
-          {st.portraitSrc && <source media={PORTRAIT_MQ} srcset={st.portraitSrc} />}
+        st.eager ? (
+          /* The landing still: a real <picture> so the browser resolves
+             portrait vs landscape itself and starts fetching immediately. This
+             is the first thing anyone sees, so it is the one asset worth
+             prioritising. */
+          <picture>
+            {st.portraitSrc && <source media={PORTRAIT_MQ} srcset={st.portraitSrc} />}
+            <img
+              class="station-still"
+              data-still-mode={st.mode}
+              data-still-id={st.id}
+              data-still-eager
+              src={st.src}
+              alt=""
+              fetchpriority="high"
+              loading="eager"
+              decoding="async"
+            />
+          </picture>
+        ) : (
+          /* No src, so nothing is fetched until its station is close —
+             attachStill picks the tier and assigns it. loading="lazy" would NOT
+             achieve this on its own:
+             these sit inside the viewport at opacity 0, which counts as
+             visible, so the browser fetches them anyway. */
           <img
             class="station-still"
             data-still-mode={st.mode}
             data-still-id={st.id}
-            src={st.src}
+            data-still-src={st.src}
+            data-still-portrait={st.portraitSrc}
             alt=""
-            loading="eager"
             decoding="async"
           />
-        </picture>
+        )
       ))}
     </div>
 
@@ -317,7 +349,8 @@ const copy = {
           data-loop-mode={lp.mode}
           data-loop-id={lp.id}
           data-loop-src={lp.src}
-          poster={lp.poster}
+          data-loop-poster={lp.poster}
+          data-loop-poster-portrait={lp.posterPortrait}
           preload="none"
           muted
           loop
@@ -408,11 +441,104 @@ const copy = {
   </div>
 </section>
 
+{/* The intro hold. Deliberately NOT a preloader: waiting for the whole
+    sequence would be 21s at 25Mbps and 53s at 10Mbps. It waits only for the
+    landing still — the thing you actually look at — and gives up after
+    INTRO_MAX_MS regardless, so a slow connection is never trapped behind it.
+    The progressive loader keeps filling in behind, exactly as before. */}
+<div class="intro" data-intro role="presentation">
+  <div class="intro-inner">
+    <img
+      class="intro-mark"
+      src="/logo-light.webp"
+      alt=""
+      width="560"
+      height="534"
+      fetchpriority="high"
+      decoding="async"
+    />
+    <span class="intro-rule" aria-hidden="true"><i></i></span>
+  </div>
+</div>
+
 <style>
   .hero-track {
     position: relative;
     height: 900vh; /* total scroll distance; more = slower, more cinematic scrub */
   }
+  /* ---- intro hold -------------------------------------------------------
+     Sits above the header (100) and the gallery (200), below the compass
+     cursor (9999) — the cursor should still be the cursor while it shows. */
+  .intro {
+    position: fixed;
+    inset: 0;
+    z-index: 500;
+    display: grid;
+    place-items: center;
+    background: var(--bg);
+    opacity: 1;
+    transition: opacity 0.42s ease;
+  }
+  .intro[data-done] {
+    opacity: 0;
+    pointer-events: none;
+  }
+  .intro[hidden] {
+    display: none;
+  }
+  .intro-inner {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    /* Optically centred rather than mathematically: a mark sitting dead-centre
+       reads low, and on a phone the browser chrome eats the bottom. */
+    transform: translateY(-4vh);
+  }
+  .intro-mark {
+    width: clamp(112px, 26vw, 188px);
+    height: auto;
+    opacity: 0;
+    animation: intro-mark-in 0.7s ease 0.05s forwards;
+  }
+  /* The hairline. An indeterminate sweep, not a percentage: the honest number
+     would be dominated by frames the visitor does not need yet, and a counter
+     invites watching it. */
+  .intro-rule {
+    display: block;
+    position: relative;
+    margin-top: clamp(1.1rem, 3vh, 1.9rem);
+    width: clamp(96px, 22vw, 150px);
+    height: 1px;
+    overflow: hidden;
+    background: rgba(245, 241, 232, 0.14);
+  }
+  .intro-rule i {
+    position: absolute;
+    inset: 0;
+    display: block;
+    background: linear-gradient(
+      90deg,
+      transparent,
+      var(--accent) 45%,
+      var(--accent) 55%,
+      transparent
+    );
+    transform: translateX(-100%);
+    animation: intro-sweep 1.25s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  }
+  @keyframes intro-mark-in {
+    from { opacity: 0; transform: scale(0.97); }
+    to   { opacity: 0.94; transform: none; }
+  }
+  @keyframes intro-sweep {
+    to { transform: translateX(100%); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .intro { transition: none; }
+    .intro-mark { animation: none; opacity: 0.94; }
+    .intro-rule i { animation: none; transform: none; opacity: 0.5; }
+  }
+
   .hero-stage {
     position: sticky;
     top: 0;
@@ -738,6 +864,51 @@ const copy = {
   function initHero() {
     const canvas = document.querySelector<HTMLCanvasElement>('[data-hero-canvas]');
     const track = document.querySelector<HTMLElement>('[data-hero-track]');
+    // ---- intro hold ------------------------------------------------------
+    // Gated on the landing still, never on the sequence. Three bounds, all of
+    // which matter: a MINIMUM so it cannot flash on a fast connection, a
+    // MAXIMUM so it cannot trap anyone on a slow one, and a once-per-session
+    // flag so it stays a first impression rather than a toll booth.
+    const INTRO_MIN_MS = 420;
+    const INTRO_MAX_MS = 2500;
+    const introEl = document.querySelector<HTMLElement>('[data-intro]');
+    if (introEl) {
+      let seen = false;
+      try { seen = sessionStorage.getItem('intro-seen') === '1'; } catch {}
+      const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      if (seen) {
+        introEl.hidden = true;
+      } else {
+        const started = performance.now();
+        let dismissed = false;
+        const dismiss = () => {
+          if (dismissed) return;
+          dismissed = true;
+          try { sessionStorage.setItem('intro-seen', '1'); } catch {}
+          const wait = Math.max(0, INTRO_MIN_MS - (performance.now() - started));
+          window.setTimeout(() => {
+            introEl.dataset.done = '';
+            // Leave the DOM only after the fade, so nothing flickers back.
+            window.setTimeout(() => { introEl.hidden = true; }, reduced ? 0 : 460);
+          }, wait);
+        };
+        // The landing still is the whole point of waiting: it is what fills the
+        // screen. decode() resolves when it is actually paintable, not merely
+        // downloaded, which is the difference between a clean reveal and a pop.
+        const first = document.querySelector<HTMLImageElement>('[data-still-eager]');
+        const ready = first
+          ? (first.complete ? first.decode().catch(() => {}) : new Promise<void>((res) => {
+              first.addEventListener('load', () => first.decode().then(() => res(), () => res()), { once: true });
+              first.addEventListener('error', () => res(), { once: true });
+            }))
+          : Promise.resolve();
+        Promise.race([
+          ready,
+          new Promise((res) => window.setTimeout(res, INTRO_MAX_MS)),
+        ]).then(dismiss, dismiss);
+      }
+    }
+
     const scrollCue = document.querySelector<HTMLElement>('[data-scroll-cue]');
     const blocks = Array.from(document.querySelectorAll<HTMLElement>('.copy-block'));
     const stills = Array.from(document.querySelectorAll<HTMLElement>('.station-still'));
@@ -784,10 +955,36 @@ const copy = {
     /** How far ahead of a station's range to start fetching its clip. */
     const LOOP_PREFETCH = 0.08;
 
+    /* Stills are fetched further ahead than clips: a still must be fully there
+       to be worth anything (a half-decoded image pops), whereas a clip only has
+       to start. */
+    const STILL_PREFETCH = 0.16;
+    // Same query as PORTRAIT_MQ in the frontmatter and as wantPortraitLoops
+    // above; written out because frontmatter constants are build-time only and
+    // are not in scope here.
+    const wantPortraitStills = wantPortraitLoops;
+
+    function attachStill(img: HTMLImageElement) {
+      if (img.src) return; // eager one, or already attached
+      const portrait = img.dataset.stillPortrait;
+      const base = wantPortraitStills && portrait ? portrait : img.dataset.stillSrc;
+      if (base) img.src = base;
+    }
+
     function attachLoopSource(v: HTMLVideoElement) {
       if (v.src) return; // already attached
       const base = v.dataset.loopSrc;
       if (!base) return;
+      // Posters are assigned here, never in markup: a poster is fetched
+      // eagerly whatever `preload` says, so in markup they pulled stills the
+      // visitor was nowhere near (measured: closing's 1.0MB arriving at the top
+      // of the page) and always in the landscape tier, so a portrait phone
+      // fetched the same station twice. Assigning here picks the right tier and
+      // fetches exactly once.
+      const poster = wantPortraitLoops && v.dataset.loopPosterPortrait
+        ? v.dataset.loopPosterPortrait
+        : v.dataset.loopPoster;
+      if (poster && !v.poster) v.poster = poster;
       v.src = `${base}${wantPortraitLoops ? '-portrait' : ''}.${loopExt}`;
       v.load();
     }
@@ -852,7 +1049,13 @@ const copy = {
             continue;
           }
           const r = rangeById[still.dataset.stillId!];
-          still.style.opacity = r ? String(opacityForRange(progress, r.start, r.end)) : '0';
+          const o = r ? opacityForRange(progress, r.start, r.end) : 0;
+          // Fetch before it is needed, never on arrival — an image assigned at
+          // the moment it should be visible fades in blank and pops.
+          if (r && (o > 0 || (progress > r.start - STILL_PREFETCH && progress < r.end + STILL_PREFETCH))) {
+            attachStill(still as HTMLImageElement);
+          }
+          still.style.opacity = String(o);
         }
 
         // Ambient loop rides the same curve as its still, so the handover is a
