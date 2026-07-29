@@ -8,29 +8,40 @@ import { EMAIL } from '../lib/site';
 ---
 <section class="enquire" id="enquire" data-enquire-section hidden>
   <div class="enquire-inner">
-    <p class="eyebrow" data-enquire-eyebrow>— Enquire</p>
+    <p class="eyebrow" data-enquire-eyebrow data-label-en="— Enquire" data-label-es="— Contacto">— Enquire</p>
 
     {/* Hire has no panel here any more: booking and the hire enquiry form both
         moved into the fleet gallery overlay, so you pick a van before you ask
         about it. See Fleet.astro. This section is Build-only now, and hides
         itself entirely in Hire. */}
     <div data-enquire-panel="build" hidden>
-      <h2 class="serif">Tell us about your build.</h2>
-      <p class="lede">A bare panel van, or a camper that's seen better decades. Tell us where you're starting and we'll write back.</p>
+      <h2 class="serif" data-label-en="Tell us about your build." data-label-es="Cuéntanos tu proyecto.">Tell us about your build.</h2>
+      <p class="lede"
+        data-label-en="A bare panel van, or a camper that's seen better decades. Tell us where you're starting and we'll write back."
+        data-label-es="Una furgoneta vacía o una camper que ha visto décadas mejores. Cuéntanos de dónde partes y te contestamos."
+      >A bare panel van, or a camper that's seen better decades. Tell us where you're starting and we'll write back.</p>
       <form class="enquiry-form" data-enquiry-form="build">
         <label>
-          Your name
+          <span data-label-en="Your name" data-label-es="Tu nombre">Your name</span>
           <input type="text" name="name" required autocomplete="name" />
         </label>
         <label>
-          What are you starting with?
-          <input type="text" name="base" placeholder="e.g. a 2019 Transporter, an old T2 that needs love…" required />
+          <span data-label-en="What are you starting with?" data-label-es="¿Con qué empiezas?">What are you starting with?</span>
+          <input type="text" name="base" required
+            data-ph-en="e.g. a 2019 Transporter, an old T2 that needs love…"
+            data-ph-es="p. ej. una Transporter de 2019, una T2 vieja que pide cariño…"
+            placeholder="e.g. a 2019 Transporter, an old T2 that needs love…" />
         </label>
         <label>
-          What do you have in mind? <span class="optional">(optional)</span>
-          <textarea name="notes" rows="3" placeholder="Full conversion, renovation, something in between…"></textarea>
+          <span data-label-en="What do you have in mind?" data-label-es="¿Qué tienes en mente?">What do you have in mind?</span> <span class="optional" data-label-en="(optional)" data-label-es="(opcional)">(optional)</span>
+          <textarea name="notes" rows="3"
+            data-ph-en="Full conversion, renovation, something in between…"
+            data-ph-es="Camperización completa, reforma, algo intermedio…"
+            placeholder="Full conversion, renovation, something in between…"></textarea>
         </label>
-        <button type="submit" class="submit-btn">Start the conversation &rarr;</button>
+        <button type="submit" class="submit-btn"
+          data-label-en="Start the conversation &rarr;" data-label-es="Empecemos a hablar &rarr;"
+        >Start the conversation &rarr;</button>
       </form>
     </div>
   </div>
@@ -140,7 +151,30 @@ import { EMAIL } from '../lib/site';
         more: 'What I have in mind',
       },
     };
-    emailStrings.es = emailStrings.en;
+    emailStrings.es = {
+      subject: 'Consulta de camperización',
+      greeting: 'Hola Coruña Campervan:',
+      intro: 'Tenemos una furgoneta y una idea.',
+      name: 'Nombre',
+      base: 'Punto de partida',
+      more: 'Lo que tengo en mente',
+    };
+
+    // Swap every visible string in this section. Labels and placeholders each
+    // carry both languages inline, so this needs no re-render.
+    function applyLang(lang) {
+      const key = lang === 'es' ? 'labelEs' : 'labelEn';
+      const phKey = lang === 'es' ? 'phEs' : 'phEn';
+      if (!section) return;
+      section.querySelectorAll('[data-label-en]').forEach((el) => {
+        const text = el.dataset[key];
+        if (text) el.innerHTML = text;
+      });
+      section.querySelectorAll('[data-ph-en]').forEach((el) => {
+        const text = el.dataset[phKey];
+        if (text) el.setAttribute('placeholder', text);
+      });
+    }
 
     // The whole section is Build's now — in Hire the fleet takes its place.
     function applyMode(mode) {
@@ -153,6 +187,7 @@ import { EMAIL } from '../lib/site';
     document.addEventListener('mode-change', (e) => applyMode(e.detail.mode));
     document.addEventListener('language-change', (e) => {
       currentLang = e.detail.lang;
+      applyLang(currentLang);
     });
 
     document.querySelectorAll('[data-enquiry-form]').forEach((form) => {
@@ -175,6 +210,7 @@ import { EMAIL } from '../lib/site';
     });
 
     applyMode('hire');
+    applyLang(currentLang);
   }
 
   initEnquiry();

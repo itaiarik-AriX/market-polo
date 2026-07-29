@@ -10,9 +10,11 @@ import { BOOKING_URL } from '../lib/site';
       </div>
     </div>
 
-    <div class="mode-toggle" role="tablist" aria-label="Hire or build a campervan">
-      <button type="button" class="mode-btn" data-mode-btn="hire" role="tab" aria-selected="true">Hire</button>
-      <button type="button" class="mode-btn" data-mode-btn="build" role="tab" aria-selected="false">Build</button>
+    <div class="mode-toggle" role="tablist" aria-label="Hire or build a campervan" data-mode-toggle-label>
+      <button type="button" class="mode-btn" data-mode-btn="hire" role="tab" aria-selected="true"
+        data-label-en="Hire" data-label-es="Alquilar">Hire</button>
+      <button type="button" class="mode-btn" data-mode-btn="build" role="tab" aria-selected="false"
+        data-label-en="Build" data-label-es="Camperizar">Build</button>
       <span class="mode-indicator" data-mode-indicator aria-hidden="true"></span>
     </div>
 
@@ -21,7 +23,7 @@ import { BOOKING_URL } from '../lib/site';
       href={BOOKING_URL}
       target="_blank"
       rel="noopener noreferrer"
-    >Book<span class="book-arrow" aria-hidden="true">&rarr;</span></a>
+    ><span data-label-en="Book" data-label-es="Reservar">Book</span><span class="book-arrow" aria-hidden="true">&rarr;</span></a>
   </div>
 </header>
 
@@ -213,6 +215,24 @@ import { BOOKING_URL } from '../lib/site';
 </style>
 
 <script>
+  // Every header control carries both languages as data attributes, so
+  // switching never needs a round trip or a re-render.
+  function applyHeaderLang(lang: string) {
+    const key = lang === 'es' ? 'labelEs' : 'labelEn';
+    document.querySelectorAll<HTMLElement>('.site-header [data-label-en]').forEach((el) => {
+      const text = el.dataset[key];
+      if (text) el.textContent = text;
+    });
+    const toggle = document.querySelector('[data-mode-toggle-label]');
+    if (toggle) {
+      toggle.setAttribute(
+        'aria-label',
+        lang === 'es' ? 'Alquilar o camperizar una furgoneta' : 'Hire or build a campervan'
+      );
+    }
+    document.documentElement.lang = lang;
+  }
+
   function initToggles() {
     // Language toggle
     const langToggle = document.querySelector<HTMLElement>('.lang-toggle');
@@ -224,6 +244,7 @@ import { BOOKING_URL } from '../lib/site';
           btn.setAttribute('aria-selected', String(btn.dataset.langBtn === lang));
         });
         localStorage.setItem('lang', lang);
+        applyHeaderLang(lang);
         document.dispatchEvent(new CustomEvent('language-change', { detail: { lang } }));
       }
 

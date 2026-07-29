@@ -26,8 +26,7 @@ const photosByVan: Record<string, string[]> = Object.fromEntries(
 
 const fleet = fleetByLang(photosByVan);
 
-// Section copy, keyed by language like Hero.astro. Spanish carries the English
-// strings until translation.
+// Section copy, keyed by language like Hero.astro.
 const copy = {
   en: {
     eyebrow: '— The fleet',
@@ -51,24 +50,24 @@ const copy = {
     },
   },
   es: {
-    eyebrow: '— The fleet',
-    title: 'Vans with names.',
-    lede: "There's one so far. We'd rather keep a couple running properly than a yard full of them.",
-    open: 'View photographs',
-    close: 'Close',
-    prev: 'Previous photograph',
-    next: 'Next photograph',
-    awaiting: 'Photographs coming',
-    book: 'Check availability',
-    divider: 'Rather ask us first?',
-    submit: 'Send enquiry',
+    eyebrow: '— La flota',
+    title: 'Furgos con nombre.',
+    lede: 'De momento hay una. Preferimos tener un par en condiciones que un patio lleno.',
+    open: 'Ver fotos',
+    close: 'Cerrar',
+    prev: 'Foto anterior',
+    next: 'Foto siguiente',
+    awaiting: 'Fotos en camino',
+    book: 'Ver disponibilidad',
+    divider: '¿Prefieres preguntarnos antes?',
+    submit: 'Enviar consulta',
     labels: {
-      from: 'From',
-      to: 'To',
-      name: 'Your name',
-      notes: 'Anything we should know?',
-      optional: '(optional)',
-      placeholder_notes: "Where you're dreaming of going, how many of you…",
+      from: 'Desde',
+      to: 'Hasta',
+      name: 'Tu nombre',
+      notes: '¿Algo que debamos saber?',
+      optional: '(opcional)',
+      placeholder_notes: 'A dónde quieres ir, cuántos sois…',
     },
   },
 };
@@ -750,8 +749,26 @@ const TILTS = [-1.6, 2.4, -2.8, 1.8, -2.1, 2.9];
         nameLabel: 'Name',
         more: 'Anything else',
       },
+      es: {
+        open: 'Ver fotos',
+        book: 'Ver disponibilidad',
+        divider: '¿Prefieres preguntarnos antes?',
+        submit: 'Enviar consulta',
+        awaiting: 'Fotos en camino',
+        from: 'Desde',
+        to: 'Hasta',
+        name: 'Tu nombre',
+        notes: '¿Algo que debamos saber?',
+        optional: '(opcional)',
+        placeholder_notes: 'A dónde vais, cuántos sois.',
+        subject: 'Reserva',
+        greeting: 'Hola Coruña Campervan:',
+        intro: 'Nos gustaría reservar',
+        dates: 'Fechas',
+        nameLabel: 'Nombre',
+        more: 'Algo más',
+      },
     };
-    strings.es = strings.en;
 
     let lang = localStorage.getItem('lang') || 'en';
     let mode = 'hire';

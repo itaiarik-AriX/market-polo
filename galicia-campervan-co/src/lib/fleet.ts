@@ -36,8 +36,7 @@ export const DEMO_PHOTOS = [
   '/sequences/hire-stations/closing.webp',
 ];
 
-// Keyed by language then van id, matching how Hero.astro keys its copy. Spanish
-// carries the English strings until translation.
+// Keyed by language then van id, matching how Hero.astro keys its copy.
 type VanCopy = Pick<Van, 'name' | 'status' | 'blurb'>;
 
 const copy: Record<string, Record<string, VanCopy>> = {
@@ -52,9 +51,9 @@ const copy: Record<string, Record<string, VanCopy>> = {
   es: {
     nomad: {
       name: 'Nomad',
-      status: 'Taking bookings',
+      status: 'Aceptando reservas',
       blurb:
-        "Our first, and still the one we'd take ourselves. Sleeps two, cooks properly, and gets you somewhere with a view.",
+        'La primera, y todavía la que nos llevaríamos nosotros. Duerme a dos, cocina de verdad y te lleva a sitios con vistas.',
     },
   },
 };

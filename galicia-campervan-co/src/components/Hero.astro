@@ -47,20 +47,38 @@ const stationLoops = Object.entries(timelines).flatMap(([mode, tl]) =>
 
 // Short labels for the station navigator — the copy headlines are far too long
 // to sit in a rail. Keyed the same way as `copy` below.
-const navLabels: Record<string, Record<string, string>> = {
-  hire: {
-    welcome: 'Welcome',
-    exterior: 'The van',
-    amenities: 'Living in it',
-    view: 'The view',
-    closing: 'The keys',
+const navLabels: Record<string, Record<string, Record<string, string>>> = {
+  en: {
+    hire: {
+      welcome: 'Welcome',
+      exterior: 'The van',
+      amenities: 'Living in it',
+      view: 'The view',
+      closing: 'The keys',
+    },
+    build: {
+      welcome: 'Welcome',
+      engineering: 'The build',
+      joinery: 'Inside',
+      finish: 'The life',
+      closing: 'The start',
+    },
   },
-  build: {
-    welcome: 'Welcome',
-    engineering: 'The build',
-    joinery: 'Inside',
-    finish: 'The life',
-    closing: 'The start',
+  es: {
+    hire: {
+      welcome: 'Bienvenida',
+      exterior: 'La furgo',
+      amenities: 'Vivirla',
+      view: 'Las vistas',
+      closing: 'Las llaves',
+    },
+    build: {
+      welcome: 'Bienvenida',
+      engineering: 'El trabajo',
+      joinery: 'Dentro',
+      finish: 'La vida',
+      closing: 'El principio',
+    },
   },
 };
 
@@ -79,7 +97,12 @@ const navStations = Object.entries(timelines).map(([mode, tl]) => {
       const r = ranges[s.id];
       return {
         id: s.id,
-        label: navLabels[mode]?.[s.id] ?? s.id,
+        // Both languages are emitted up front and swapped client-side, the same
+        // way the copy blocks are — the rail is built at build time, so it
+        // cannot read localStorage.
+        labels: Object.fromEntries(
+          Object.entries(navLabels).map(([lang, byMode]) => [lang, byMode[mode]?.[s.id] ?? s.id])
+        ),
         at: (((r.start + r.end) / 2) * 100).toFixed(2),
       };
     }),
@@ -175,82 +198,82 @@ const copy = {
   es: {
     hire: {
       welcome: {
-        title: 'Take the van. Follow the coast.',
+        title: 'Coge la furgo. Sigue la costa.',
         body: [
-          'A restored camper, the Atlantic outside, and a few days with nowhere you need to be.',
+          'Una camper restaurada, el Atlántico ahí fuera y unos días sin tener que estar en ningún sitio.',
         ],
       },
       exterior: {
-        eyebrow: 'The van',
-        title: 'Built properly. Made to be lived in.',
+        eyebrow: 'La furgo',
+        title: 'Bien hecha. Hecha para vivirla.',
         body: [
-          'We restored it ourselves, so we know every bolt in it.',
-          "It's the one we'd take ourselves.",
+          'La restauramos nosotros, así que conocemos cada tornillo.',
+          'Es la que nos llevaríamos nosotros.',
         ],
       },
       amenities: {
-        eyebrow: 'Living in it',
-        title: 'Small outside. Everything you need inside.',
+        eyebrow: 'Vivirla',
+        title: 'Pequeña por fuera. Todo lo necesario dentro.',
         body: [
-          "The bed pulls out in one movement. There's a hot shower outside, two rings, a sink, and enough space to actually cook.",
-          'Room enough to live in it, not just sleep in it.',
+          'La cama se despliega de un solo movimiento. Hay ducha de agua caliente fuera, dos fuegos, fregadero y sitio de sobra para cocinar de verdad.',
+          'Espacio para vivir dentro, no solo para dormir.',
         ],
       },
       view: {
-        eyebrow: 'Where you stop',
-        title: 'Stop when you find somewhere worth staying.',
+        eyebrow: 'Dónde parar',
+        title: 'Para cuando encuentres un sitio donde quedarte.',
         body: [
-          'No campsite to plan around. No itinerary to follow.',
-          'Pull off the road, open the door, put the kettle on. The coast is right there.',
+          'Sin camping que planear. Sin itinerario que seguir.',
+          'Sal de la carretera, abre la puerta, pon el agua a hervir. La costa está justo ahí.',
         ],
       },
       closing: {
-        eyebrow: 'The keys',
-        title: 'You start in A Coruña. You choose where after.',
+        eyebrow: 'Las llaves',
+        title: 'Empiezas en A Coruña. Tú decides el resto.',
         body: [
-          'Take it for a few days, head wherever you like, and bring it back when your trip is done.',
-          'We look after it ourselves, and we answer our own emails. Usually within a day.',
+          'Llévatela unos días, ve donde quieras y devuélvela cuando termine el viaje.',
+          'La cuidamos nosotros y contestamos nuestros propios correos. Normalmente en menos de un día.',
         ],
       },
     },
     build: {
       welcome: {
-        title: 'A van built around the way you travel.',
+        title: 'Una furgoneta hecha a tu manera de viajar.',
         body: [
-          'One conversion at a time, from our workshop in A Coruña.',
-          'No standard layouts, no catalogue of extras. Just a van that works for you.',
+          'Una camperización cada vez, desde nuestro taller en A Coruña.',
+          'Sin distribuciones estándar ni catálogo de extras. Solo una furgo que funcione para ti.',
         ],
       },
       engineering: {
-        eyebrow: 'The build',
-        title: 'We do the work ourselves.',
+        eyebrow: 'El trabajo',
+        title: 'El trabajo lo hacemos nosotros.',
         body: [
-          'From the first sketch to the last screw, we handle the layout, electrics, plumbing, woodwork, and all the unglamorous bits in between.',
-          'You deal directly with the people doing the work.',
+          'Del primer boceto al último tornillo: distribución, electricidad, fontanería, carpintería y todo lo poco lucido que hay en medio.',
+          'Hablas directamente con quien está haciendo el trabajo.',
         ],
       },
       joinery: {
-        eyebrow: 'Inside',
-        title: 'Every centimetre has a job.',
+        eyebrow: 'Dentro',
+        title: 'Cada centímetro tiene una función.',
         body: [
-          'A bed where you actually want it, storage where you need it, a kitchen that works.',
-          'We build for real use, not for a showroom.',
+          'La cama donde de verdad la quieres, almacenaje donde hace falta, una cocina que funciona.',
+          'Construimos para usarla de verdad, no para un escaparate.',
         ],
       },
       finish: {
-        eyebrow: 'The life',
-        title: 'Tell us what you want the van to do.',
+        eyebrow: 'La vida',
+        title: 'Cuéntanos qué quieres que haga la furgo.',
         body: [
-          'Weekend escapes, long trips, working from the road, surfing the coast.',
-          "We'll work out what it needs, then build around it.",
+          'Escapadas de fin de semana, viajes largos, trabajar desde la carretera, surfear la costa.',
+          'Nosotros vemos qué necesita y construimos a partir de ahí.',
         ],
       },
       closing: {
-        eyebrow: 'The start',
-        title: "Bring us your van. We'll build the rest.",
+        eyebrow: 'El principio',
+        title: 'Tráenos tu furgoneta. Hacemos el resto.',
         body: [
-          'Tell us what you have, where you want to go, and what you need it to do.',
-          "We'll tell you what we'd build, what it will involve, and where we'd spend your money.",
+          'Cuéntanos qué tienes, a dónde quieres ir y qué necesitas que haga.',
+          'Te diremos qué construiríamos, qué implica y en qué merece la pena gastar tu dinero.',
         ],
       },
     },
@@ -337,10 +360,12 @@ const copy = {
               type="button"
               class="nav-stop"
               data-nav-jump={it.id}
+              data-label-en={it.labels.en}
+              data-label-es={it.labels.es}
               style={`top:${it.at}%`}
-              aria-label={`Go to ${it.label}`}
+              aria-label={`Go to ${it.labels.en}`}
             >
-              <span class="nav-label">{it.label}</span>
+              <span class="nav-label">{it.labels.en}</span>
             </button>
           ))}
         </div>
@@ -916,6 +941,25 @@ const copy = {
       scrubber.setMode(mode);
     });
 
+    // The rail is rendered at build time with both languages in data
+    // attributes, so switching is a text swap rather than a re-render.
+    const GO_TO: Record<string, string> = { en: 'Go to', es: 'Ir a' };
+    function applyNavLang(lang: string) {
+      for (const rail of navRails) {
+        for (const stop of Array.from(rail.querySelectorAll<HTMLElement>('.nav-stop'))) {
+          const label = stop.dataset[lang === 'es' ? 'labelEs' : 'labelEn'];
+          if (!label) continue;
+          const span = stop.querySelector('.nav-label');
+          if (span) span.textContent = label;
+          stop.setAttribute('aria-label', `${GO_TO[lang] ?? GO_TO.en} ${label}`);
+        }
+      }
+      const nav = document.querySelector('[data-station-nav]');
+      if (nav) {
+        nav.setAttribute('aria-label', lang === 'es' ? 'Ir a una seccion' : 'Jump to a section');
+      }
+    }
+
     document.addEventListener('language-change', (e: Event) => {
       const { lang } = (e as CustomEvent).detail;
       currentLang = lang;
@@ -925,7 +969,10 @@ const copy = {
           block.style.opacity = '0';
         }
       }
+      applyNavLang(currentLang);
     });
+
+    applyNavLang(currentLang);
 
     // NOTE: there is deliberately NO scroll manipulation here — no magnetic
     // snap, no scrollIntoView, no wheel/touch preventDefault, no stepping.

@@ -19,6 +19,35 @@ const YEAR = new Date().getFullYear();
   <meta name="theme-color" content="#0b0c0d" media="(prefers-color-scheme: dark)" />
   <meta name="theme-color" content="#f5f1e8" media="(prefers-color-scheme: light)" />
   <title>Coruña Campervan — a restored camper for hire on the Galician coast</title>
+  <script is:inline>
+    // Title and description are language-specific but live in static <head>.
+    // Applied before paint so a Spanish visitor never sees the English title
+    // flash, and kept in step by the same language-change event everything
+    // else listens to.
+    (function () {
+      var STRINGS = {
+        en: {
+          title: 'Coruña Campervan — a restored camper for hire on the Galician coast',
+          description:
+            'One restored camper, available to hire on the Galician coast. Sleeps two, cooks properly, and goes wherever the road runs out.',
+        },
+        es: {
+          title: 'Coruña Campervan — camper restaurada de alquiler en la costa gallega',
+          description:
+            'Una camper restaurada, de alquiler en la costa gallega. Duerme a dos, cocina de verdad y llega hasta donde acaba la carretera.',
+        },
+      };
+      function apply(lang) {
+        var s = STRINGS[lang] || STRINGS.en;
+        document.title = s.title;
+        document.documentElement.lang = lang;
+        var meta = document.querySelector('meta[name="description"]');
+        if (meta) meta.setAttribute('content', s.description);
+      }
+      try { apply(localStorage.getItem('lang') || 'en'); } catch (e) {}
+      document.addEventListener('language-change', function (e) { apply(e.detail.lang); });
+    })();
+  </script>
   <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
   <link rel="apple-touch-icon" href="/logo-light.webp" />
   <link rel="mask-icon" href="/favicon.svg" color="#c9a961" />
