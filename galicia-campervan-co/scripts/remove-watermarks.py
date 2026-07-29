@@ -1,34 +1,38 @@
 #!/usr/bin/env python3
 """Paint out the generator's burned-in marks, letters only.
 
-The 4K master carries three marks from the tool that produced it, all at fixed
-screen positions but each only over part of the clip:
+The 4K master carries three marks from the tool that produced it:
 
-    sparkle (four-pointed star)  ~frames 1-142    welcome / exterior
-    Ltx-2   (the loud one)       ~frames 278-457  view / closing
+    sparkle (four-pointed star)  frames 1-147    welcome / exterior
+    Ltx-2   (the loud one)       frames ~296+    view / closing
     Veo     (small, corner)      whole clip
 
 An earlier pass defocused the whole corner and was rejected: it softened real
 footage to hide a small mark. This fills only the glyphs, from the pixels around
 them, so the framing is untouched — nothing is cropped, nothing else is blurred.
-Measured union coverage is 0.74% of the frame.
 
-Three things here are load-bearing, and each was arrived at by measurement:
+Four things here are load-bearing, each arrived at by measuring rather than
+looking, after earlier versions of this script shipped visible residue:
 
-1.  The mask must cover the glyph BODY, not its outline. A local high-pass finds
-    edges only; filling the contour interiors is what closes it.
-2.  The mask must then be dilated (DILATE px). cv2.inpaint samples from the mask
-    boundary, so a mask stopping inside the glyph feeds white back in and redraws
-    the letters. A sweep at 15/23/31 showed 15 is the smallest that clears it;
-    larger only widens the smoothed patch.
-3.  Intermediates are PNG, never WebP. Painting an already-encoded WebP and
-    re-saving compresses the frame twice: measured 39.43 dB on frame 1 against
-    41.63 dB for a single encode. Every frame goes lossless -> paint -> one
-    WebP encode.
+1.  Masks follow the glyph BODY, not its outline. A local high-pass finds edges
+    only; filling the contour interiors is what closes them.
+2.  Masks are dilated generously (DILATE px). cv2.inpaint samples from the mask
+    boundary, so a mask stopping inside a glyph feeds white back in and redraws
+    it. Bright-edge residue on frame 362, against a 2.2% scene-detail floor:
+    3.99% at 15px, 2.53% at 21, 2.36% at 25. Shipping 25.
+3.  Marks are located per frame by TEMPLATE MATCHING, not by brightness.
+    Brightness cannot tell a white glyph from sunlit grass or a wicker basket:
+    an earlier version painted only 95 of the sparkle's ~145 frames, and put
+    Ltx-2's range at 220-457 when it truly starts near 296 — which would have
+    smeared 80 clean frames. Correlation separates cleanly: Ltx-2 scores
+    0.14-0.25 where absent and 0.84-0.88 where present. It also tracks the
+    sparkle, which drifts about 140x37px.
+4.  Intermediates are PNG, never WebP. Painting an already-encoded WebP and
+    re-saving compresses twice: 39.43 dB against 41.63 dB for a single encode.
 
-Masks are derived from the shipped 1920 frames (any tier would do — same
-picture) and scaled per tier. Frames outside a mark's detected range are left
-alone, so clean footage is never painted.
+Reference frames come from the master, never from public/sequences — this script
+overwrites that directory, so learning from it would mean a second run derives
+its masks from already-painted frames.
 
 The portrait tiers need no work: their 9:16 window ends before the marks.
 
@@ -49,36 +53,30 @@ from PIL import Image
 Image.MAX_IMAGE_PIXELS = None
 
 SRC = 'raw-footage/van-life-2.mp4'
-REF_SEQ = 'public/sequences/hire'          # 1920x1080, used to derive the masks
 FPS = 12
 REF_W, REF_H = 1920, 1080
+N_FRAMES = 457
 
-DILATE = 25                                # see note 2 above
+DILATE = 25
 INPAINT_RADIUS = 12
-BRIGHT_OVER_LOCAL = 6                      # mark is brighter than its surround
-PRESENT_IN_FRACTION = 0.75                 # burned in, not passing scene detail
-DETECT_SIGMA = 3.0                         # frames scoring above clean baseline
 
-# (name, search box in 1920x1080, frame range to learn the shape from).
-# Shapes are derived from the footage rather than hand-drawn, so each mask
-# follows the actual glyphs.
-MARKS = [
-    ('sparkle', (1650, 830, 1920, 1010), (0, 140)),
-    ('ltx',     (1560, 900, 1870, 1080), (295, 457)),
+# name, box in 1920x1080, frames to learn the template from, frames to search,
+# correlation threshold. The measured margins are wide, so these are not
+# delicate settings.
+TRACKED = [
+    ('ltx',     (1560, 900, 1870, 1080), (295, 457), (0, 457), 0.50),
+    ('sparkle', (1650, 830, 1920, 1010), (0, 140),   (0, 190), 0.55),
 ]
 
-# "Veo" is ~40x30px hard against the bottom-right corner. Too small and too near
-# the edge for the vote-based derivation to resolve (the ring it would be scored
-# against falls off-frame), so it gets a fixed rectangle, located by inspection
-# at 2x. Painted on EVERY frame on purpose: brightness detection here fires on
-# sea glare as readily as on the glyph, and a rect that came and went would
-# shimmer in the corner while scrolling. At 0.12% of frame in the extreme corner
-# that costs almost nothing, and it guarantees the mark is gone on 16:9 windows,
+# "Veo" is ~40x30px hard against the bottom-right corner — too small and too
+# close to the edge to correlate reliably, so it gets a fixed rectangle, located
+# by inspection at 2x, painted on every frame. A rect that came and went would
+# shimmer in the corner while scrolling, and at 0.12% of frame in the extreme
+# corner painting it always costs almost nothing. It matters on 16:9 windows,
 # where cover-fit does not crop it away.
 VEO_RECT = (1860, 1040, 1920, 1080)
 
 TIERS = {
-    # name: (out dir, width, webp quality) — quality matches the existing tiers
     'hire':    ('public/sequences/hire', 1920, 88),
     'hire-sm': ('public/sequences/hire-sm', 1080, 82),
 }
@@ -91,50 +89,53 @@ def local_high(gray, sigma=15):
     return gray - cv2.GaussianBlur(gray, (0, 0), sigma)
 
 
-def derive_mask(files, box, lo, hi):
-    """Glyph-shaped mask: bright above local surround in most frames of a range."""
-    votes = None
-    n = 0
+def hp_u8(path, box):
+    g = np.asarray(Image.open(path).convert('L').crop(box), dtype=np.float32)
+    return np.clip((local_high(g) + 40) / 80 * 255, 0, 255).astype(np.uint8)
+
+
+def build_template(files, box, lo, hi):
+    """Average local high-pass over a range: a fixed mark survives, scene cancels."""
+    acc, n = None, 0
     for f in files[lo:hi]:
         g = np.asarray(Image.open(f).convert('L').crop(box), dtype=np.float32)
-        bright = local_high(g) > BRIGHT_OVER_LOCAL
-        votes = bright.astype(np.float32) if votes is None else votes + bright
+        r = local_high(g)
+        acc = r if acc is None else acc + r
         n += 1
-    m = ((votes / n) > PRESENT_IN_FRACTION).astype(np.uint8) * 255
-    m = cv2.morphologyEx(m, cv2.MORPH_CLOSE, np.ones((9, 9), np.uint8))
-    cnts, _ = cv2.findContours(m, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    filled = np.zeros_like(m)
-    cv2.drawContours(filled, cnts, -1, 255, -1)          # solid centres, not edges
-    return cv2.dilate(filled, np.ones((DILATE, DILATE), np.uint8), 1)
+    mean = acc / n
+    norm = np.clip((mean - mean.min()) / (mean.max() - mean.min()) * 255,
+                   0, 255).astype(np.uint8)
+    _, th = cv2.threshold(norm, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+    cnts, _ = cv2.findContours(th, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    boxes = [cv2.boundingRect(c) for c in cnts if cv2.contourArea(c) > 50]
+    if not boxes:
+        return None, None
+    x0 = max(0, min(b[0] for b in boxes) - 6)
+    y0 = max(0, min(b[1] for b in boxes) - 6)
+    x1 = max(b[0] + b[2] for b in boxes) + 6
+    y1 = max(b[1] + b[3] for b in boxes) + 6
+    tpl = norm[y0:y1, x0:x1]
+
+    _, tm = cv2.threshold(tpl, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+    c2, _ = cv2.findContours(tm, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    shape = np.zeros_like(tm)
+    cv2.drawContours(shape, c2, -1, 255, -1)          # solid glyphs, not edges
+    shape = cv2.dilate(shape, np.ones((DILATE, DILATE), np.uint8), 1)
+    return tpl, shape
 
 
-def detect_frames(files, box, mask, lo_hint, hi_hint):
-    """Which frames actually carry this mark.
-
-    Scored as how much brighter the masked glyph is than the ring just outside
-    it, calibrated against frames known to be clean — so a fade in or out is
-    picked up without hard-coding frame numbers.
-    """
-    sel = mask > 0
-    ring = cv2.dilate(mask, np.ones((25, 25), np.uint8), 1) > 0
-    ring &= ~sel
-    if sel.sum() == 0 or ring.sum() == 0:
-        return set()
-    scores = []
-    for f in files:
-        g = np.asarray(Image.open(f).convert('L').crop(box), dtype=np.float32)
-        scores.append(float(g[sel].mean() - g[ring].mean()))
-    scores = np.array(scores)
-    outside = np.ones(len(scores), bool)
-    outside[max(0, lo_hint - 30):min(len(scores), hi_hint + 30)] = False
-    if outside.sum() < 20:
-        outside = np.ones(len(scores), bool)
-        outside[lo_hint:hi_hint] = False
-    base, sd = scores[outside].mean(), scores[outside].std() + 1e-6
-    return set(np.where(scores > base + DETECT_SIGMA * sd)[0].tolist())
+def track(files, box, tpl, corr, lo, hi):
+    """{frame index: (y, x)} wherever the template correlates above `corr`."""
+    found = {}
+    for i in range(lo, min(hi, len(files))):
+        m = cv2.matchTemplate(hp_u8(files[i], box), tpl, cv2.TM_CCOEFF_NORMED)
+        _, mx, _, loc = cv2.minMaxLoc(m)
+        if mx >= corr:
+            found[i] = (loc[1] + box[1], loc[0] + box[0])
+    return found
 
 
-def scaled(mask_full, w):
+def scale_mask(mask_full, w):
     if w == REF_W:
         return mask_full
     h = int(round(w * REF_H / REF_W / 2)) * 2
@@ -149,6 +150,14 @@ def paint(img_rgb, mask, radius):
         cv2.COLOR_BGR2RGB)
 
 
+def extract(src, w, out_dir):
+    subprocess.run(
+        ['ffmpeg', '-v', 'error', '-i', src,
+         '-vf', f'fps={FPS},scale={w}:-2', '-c:v', 'png',
+         '-y', os.path.join(out_dir, '%04d.png')], check=True)
+    return sorted(glob.glob(os.path.join(out_dir, '*.png')))
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--dry-run', action='store_true')
@@ -159,49 +168,45 @@ def main():
     if not os.path.exists(SRC):
         sys.exit(f'missing {SRC}')
 
-    # Reference frames come from the master, never from public/sequences: this
-    # script overwrites that directory, so learning masks from it would mean a
-    # second run derives them from already-painted frames and finds nothing.
     ref_tmp = tempfile.mkdtemp(prefix='wm-ref-')
     print(f'extracting reference frames at {REF_W}px…', flush=True)
-    subprocess.run(
-        ['ffmpeg', '-v', 'error', '-i', SRC,
-         '-vf', f'fps={FPS},scale={REF_W}:-2', '-c:v', 'png',
-         '-y', os.path.join(ref_tmp, '%04d.png')], check=True)
-    files = sorted(glob.glob(os.path.join(ref_tmp, '*.png')))
-    if len(files) != 457:
+    files = extract(SRC, REF_W, ref_tmp)
+    if len(files) != N_FRAMES:
         shutil.rmtree(ref_tmp, ignore_errors=True)
-        sys.exit(f'expected 457 reference frames, found {len(files)}')
+        sys.exit(f'expected {N_FRAMES} reference frames, found {len(files)}')
 
-    # ---- masks, and which frames each mark is actually on -------------------
-    full = np.zeros((REF_H, REF_W), np.uint8)
+    # ---- locate every mark, per frame --------------------------------------
     per_frame = {}
+    union = np.zeros((REF_H, REF_W), np.uint8)
 
-    def add(name, layer, frames):
-        nonlocal full
-        for i in frames:
-            cur = per_frame.get(i)
-            per_frame[i] = layer.copy() if cur is None else np.maximum(cur, layer)
-        full = np.maximum(full, layer)
-        rng = (min(frames) + 1, max(frames) + 1) if frames else None
-        print(f'  {name:8s} {100*(layer>0).mean():5.3f}% of frame, '
-              f'on {len(frames):3d} frames, range {rng}', flush=True)
+    def stamp(i, y, x, shape):
+        h, w = shape.shape
+        y, x = max(0, min(y, REF_H - h)), max(0, min(x, REF_W - w))
+        layer = per_frame.get(i)
+        if layer is None:
+            layer = per_frame[i] = np.zeros((REF_H, REF_W), np.uint8)
+        layer[y:y + h, x:x + w] = np.maximum(layer[y:y + h, x:x + w], shape)
+        union[y:y + h, x:x + w] = np.maximum(union[y:y + h, x:x + w], shape)
 
-    for name, box, (lo, hi) in MARKS:
-        m = derive_mask(files, box, lo, hi)
-        frames = detect_frames(files, box, m, lo, hi)
-        x0, y0, x1, y1 = box
-        layer = np.zeros((REF_H, REF_W), np.uint8)
-        layer[y0:y1, x0:x1] = m
-        add(name, layer, frames)
+    for name, box, (llo, lhi), (slo, shi), corr in TRACKED:
+        tpl, shape = build_template(files, box, llo, lhi)
+        if tpl is None:
+            sys.exit(f'{name}: could not build a template')
+        hits = track(files, box, tpl, corr, slo, shi)
+        for i, (y, x) in hits.items():
+            stamp(i, y, x, shape)
+        rng = (min(hits) + 1, max(hits) + 1) if hits else None
+        print(f'  {name:8s} template {tpl.shape[1]}x{tpl.shape[0]}, '
+              f'on {len(hits):3d} frames, range {rng}', flush=True)
 
     vx0, vy0, vx1, vy1 = VEO_RECT
-    veo_layer = np.zeros((REF_H, REF_W), np.uint8)
-    veo_layer[vy0:vy1, vx0:vx1] = 255
-    add('veo', veo_layer, set(range(len(files))))
+    veo = np.full((vy1 - vy0, vx1 - vx0), 255, np.uint8)
+    for i in range(len(files)):
+        stamp(i, vy0, vx0, veo)
+    print(f'  {"veo":8s} fixed rect, on {len(files)} frames', flush=True)
+    print(f'  union {100*(union>0).mean():.2f}% of frame; '
+          f'{len(per_frame)}/{len(files)} frames painted', flush=True)
 
-    print(f'  union {100*(full>0).mean():.2f}% of frame; '
-          f'{len(per_frame)}/457 frames painted', flush=True)
     if args.dry_run:
         shutil.rmtree(ref_tmp, ignore_errors=True)
         return
@@ -211,32 +216,28 @@ def main():
         if tier not in want:
             continue
         out_dir, w, q = TIERS[tier]
-        m_tier = {i: scaled(m, w) for i, m in per_frame.items()}
+        masks = {i: scale_mask(m, w) for i, m in per_frame.items()}
         reuse = (w == REF_W)
         tmp = ref_tmp if reuse else tempfile.mkdtemp(prefix=f'wm-{tier}-')
         try:
             if reuse:
                 print(f'\n{tier}: reusing the {w}px reference frames…', flush=True)
+                made = files
             else:
-                print(f'\n{tier}: extracting {w}px from the master as PNG…', flush=True)
-                subprocess.run(
-                    ['ffmpeg', '-v', 'error', '-i', SRC,
-                     '-vf', f'fps={FPS},scale={w}:-2', '-c:v', 'png',
-                     '-y', os.path.join(tmp, '%04d.png')],
-                    check=True)
-            made = sorted(glob.glob(os.path.join(tmp, '*.png')))
-            if len(made) != 457:
-                sys.exit(f'{tier}: extracted {len(made)} frames, expected 457')
-            print(f'{tier}: painting {len(m_tier)} of {len(made)}…', flush=True)
+                print(f'\n{tier}: extracting {w}px as PNG…', flush=True)
+                made = extract(SRC, w, tmp)
+                if len(made) != N_FRAMES:
+                    sys.exit(f'{tier}: got {len(made)} frames, expected {N_FRAMES}')
+            print(f'{tier}: painting {len(masks)} of {len(made)}…', flush=True)
             for n, p in enumerate(made):
                 idx = int(os.path.basename(p)[:4]) - 1
                 img = np.asarray(Image.open(p).convert('RGB'))
-                if idx in m_tier:
-                    img = paint(img, m_tier[idx], INPAINT_RADIUS)
+                if idx in masks:
+                    img = paint(img, masks[idx], INPAINT_RADIUS)
                 Image.fromarray(img).save(
                     os.path.join(out_dir, f'{idx+1:04d}.webp'),
                     'WEBP', quality=q, method=6)
-                os.unlink(p)                     # keep peak disk bounded
+                os.unlink(p)
                 if n % 100 == 0:
                     print(f'  {tier}: {n}/{len(made)}', flush=True)
             print(f'{tier}: done -> {out_dir}', flush=True)
@@ -245,14 +246,17 @@ def main():
             if reuse:
                 ref_tmp = None
 
-    # ---- sharp station stills ----------------------------------------------
     if ref_tmp:
         shutil.rmtree(ref_tmp, ignore_errors=True)
 
+    # ---- sharp station stills ----------------------------------------------
     if 'stations' in want:
         print('\nstations: re-extracting view + closing at 3840…', flush=True)
-        m_st = scaled(full, STATION_W)
         for sid, frame in STATIONS:
+            m = per_frame.get(frame)
+            if m is None:
+                print(f'  {sid}: no mark on frame {frame}, skipping', flush=True)
+                continue
             with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as tf:
                 png = tf.name
             try:
@@ -261,13 +265,14 @@ def main():
                      '-i', SRC, '-frames:v', '1', '-y', png], check=True)
                 img = np.asarray(Image.open(png).convert('RGB'))
                 h, w = img.shape[:2]
-                mask = m_st[:h, :w]
                 out = os.path.join(STATIONS_DIR, f'{sid}.webp')
-                Image.fromarray(paint(img, mask, INPAINT_RADIUS * 2)).save(
-                    out, 'WEBP', quality=STATION_QUALITY, method=6)
+                Image.fromarray(
+                    paint(img, scale_mask(m, w)[:h, :w], INPAINT_RADIUS * 2)
+                ).save(out, 'WEBP', quality=STATION_QUALITY, method=6)
                 print(f'  {sid} ({w}x{h}) -> {out}', flush=True)
             finally:
-                os.path.exists(png) and os.unlink(png)
+                if os.path.exists(png):
+                    os.unlink(png)
 
 
 if __name__ == '__main__':
