@@ -1,5 +1,9 @@
 ---
 import { timelines, buildTimeline } from '../lib/heroTimeline';
+import {
+  CHART_BANDS, CHART_PEAKS, CHART_VIEWBOX, VIEW_X, VIEW_Y, VIEW_W, VIEW_H,
+  MAX_ELEV, BAND_COUNT,
+} from '../lib/galiciaChart';
 
 // Build the list of high-res station stills (only for modes that provide them).
 // Each still is the SAME frame the canvas holds on, at full resolution — so it
@@ -441,14 +445,30 @@ const copy = {
   </div>
 </section>
 
-{/* The intro. Deliberately NOT a full preloader: waiting for the whole sequence
-    would be 21s at 25Mbps and 53s at 10Mbps. The counter is driven by what has
-    genuinely arrived — the landing still, then the opening scrub frames — and
-    gives up at INTRO_MAX_MS regardless, so a slow connection is never trapped.
-    The progressive loader keeps filling in behind it, exactly as before. */}
-<div class="intro" data-intro role="presentation">
-  <div class="intro-glow" aria-hidden="true"></div>
+{/* The intro: a survey chart of Galicia that draws itself as the page loads.
 
+    Deliberately NOT a full preloader — waiting for the whole frame sequence
+    would be 21s at 25Mbps and 53s at 10Mbps. Progress is what has genuinely
+    arrived (the landing still, then the opening scrub frames), and
+    INTRO_MAX_MS gives up regardless so a slow connection is never trapped.
+
+    Contours are drawn low to high, so the terrain rises out of the sea, and a
+    summit's mark appears only once the survey passes its altitude. The readout
+    counts metres as well as percent: the bar reads as an altitude survey
+    climbing to Galicia's highest point rather than a generic loader. */}
+<!-- MAX_ELEV / BAND_COUNT ride on the element: they are frontmatter, so they
+     are build-time only and are not in scope inside the client script. -->
+<div
+  class="intro"
+  data-intro
+  data-max-elev={MAX_ELEV}
+  data-band-count={BAND_COUNT}
+  data-view-x={VIEW_X}
+  data-view-y={VIEW_Y}
+  data-view-w={VIEW_W}
+  data-view-h={VIEW_H}
+  role="presentation"
+>
   <div class="intro-top">
     <div class="intro-brand serif">Coruña <em>Campervan</em></div>
     <div class="intro-meta">
@@ -458,17 +478,56 @@ const copy = {
     </div>
   </div>
 
-  <div class="intro-center">
-    <span class="intro-count-wrap">
-      <span class="intro-count serif" data-intro-count>0</span>
-      <span class="intro-percent serif">%</span>
-    </span>
+  <svg
+    class="intro-chart"
+    viewBox={CHART_VIEWBOX}
+    preserveAspectRatio="xMidYMid meet"
+    aria-hidden="true"
+  >
+    {CHART_BANDS.map((b) => (
+      b.d.map((dAttr) => (
+        /* pathLength normalises every contour to 1, so the draw fraction is the
+           dashoffset directly and no real path lengths are needed. */
+        <path
+          class={b.coast ? 'contour is-coast' : 'contour'}
+          data-band={b.band}
+          d={dAttr}
+          pathLength="1"
+        />
+      ))
+    ))}
+  </svg>
+
+  <div class="intro-peaks">
+    {CHART_PEAKS.map((pk) => (
+      <div
+        class:list={['peak', pk.side === 'left' && 'is-left']}
+        data-side={pk.side}
+        data-peak-elev={pk.elev}
+        data-x={pk.x}
+        data-y={pk.y}
+      >
+        <svg class="peak-mark" viewBox="0 0 10 9" aria-hidden="true">
+          <path d="M1 8 L5 1 L9 8 Z" />
+        </svg>
+        <span class="peak-text">
+          <span class="peak-name">{pk.name}</span>
+          <span class="peak-meta">{pk.coords}  ·  {pk.elev} m</span>
+        </span>
+      </div>
+    ))}
   </div>
 
   <div class="intro-bottom">
-    <div class="intro-caption">Take the van. Follow the coast.</div>
+    <div class="intro-readout">
+      <span class="intro-status">GPS calibrating</span>
+      <span class="intro-elev" data-intro-elev>0 m</span>
+    </div>
     <div class="intro-bar"><i data-intro-bar></i></div>
-    <div class="intro-status" data-intro-status>Loading</div>
+    <div class="intro-count-wrap">
+      <span class="intro-count serif" data-intro-count>0</span>
+      <span class="intro-percent serif">%</span>
+    </div>
   </div>
 </div>
 
@@ -477,32 +536,38 @@ const copy = {
     position: relative;
     height: 900vh; /* total scroll distance; more = slower, more cinematic scrub */
   }
-  /* ---- intro -----------------------------------------------------------
-     Above the header (100) and the gallery (200), below the compass cursor
-     (9999) — the cursor stays the cursor while this is up. */
+  /* ---- intro: the survey chart -----------------------------------------
+     Cream, not the site's near-black. It is the fleet section's own ground, and
+     it turns the sweep-up exit into a reveal: paper lifting off the footage. */
   .intro {
     position: fixed;
     inset: 0;
     z-index: 500;
-    background: var(--bg);
+    background: #ede6d8;
+    color: #2e2b27;
     padding: clamp(1.5rem, 4vw, 3rem);
     overflow: hidden;
-    transform: translateY(0);
   }
   .intro[hidden] { display: none; }
 
-  /* A slow breath behind everything, so the panel is never a flat rectangle. */
-  .intro-glow {
+  .intro-chart {
     position: absolute;
-    top: 50%;
-    left: 50%;
-    width: min(1000px, 140vw);
-    aspect-ratio: 1;
-    border-radius: 50%;
-    transform: translate(-50%, -50%);
-    background: radial-gradient(circle, rgba(224, 137, 79, 0.09) 0%, transparent 62%);
-    animation: intro-breathe 3.4s ease-in-out infinite;
-    pointer-events: none;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+  }
+  .contour {
+    fill: none;
+    stroke: #6f6659;
+    stroke-width: 0.9;
+    /* Normalised by pathLength="1", so 1 is undrawn and 0 is complete. */
+    stroke-dasharray: 1;
+    stroke-dashoffset: 1;
+    vector-effect: non-scaling-stroke;
+  }
+  .contour.is-coast {
+    stroke: #2e2b27;
+    stroke-width: 1.5;
   }
 
   .intro-top {
@@ -520,56 +585,44 @@ const copy = {
   .intro-brand {
     font-size: clamp(1.05rem, 2.4vw, 1.5rem);
     letter-spacing: -0.02em;
-    color: var(--fg);
   }
   .intro-brand em { font-style: italic; }
   .intro-meta {
     text-align: right;
-    font-size: 0.7rem;
+    font-size: 0.68rem;
     letter-spacing: 0.18em;
     text-transform: uppercase;
-    color: var(--fg-dim);
+    color: #7d7365;
     line-height: 1.9;
   }
   .intro-meta-row { display: block; }
   .intro-meta-row .dash { color: var(--accent); margin-right: 0.45rem; }
 
-  /* The number is the whole design. Everything else is framing. */
-  .intro-center {
+  /* Peaks are positioned in percentages of the chart's own viewBox, so they
+     stay locked to their coordinates however the SVG is scaled. */
+  .intro-peaks { position: absolute; inset: 0; pointer-events: none; }
+  .peak {
     position: absolute;
-    inset: 0;
     display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-  /* The pair needs its own box. Aligning the % against .intro-center — which is
-     inset:0, i.e. the whole viewport — parks it at the top of the screen
-     instead of at the top of the digits. */
-  .intro-count-wrap {
-    display: inline-flex;
     align-items: flex-start;
-    /* Italic digits overhang to the right, so a hairline gap reads as a
-       collision at three digits. */
-    gap: 0.2em;
-  }
-  .intro-count {
-    font-size: clamp(5.5rem, 22vw, 18rem);
-    font-style: italic;
-    font-weight: 400;
-    line-height: 0.85;
-    letter-spacing: -0.06em;
-    color: var(--fg);
-    font-variant-numeric: tabular-nums;
-  }
-  .intro-percent {
-    font-size: clamp(1.8rem, 5vw, 4rem);
-    font-style: italic;
-    color: var(--accent);
-    line-height: 1;
-    margin-top: 0.42em;
+    gap: 0.4rem;
+    transform: translate(-4px, -6px);
     opacity: 0;
-    animation: intro-fade-in 0.5s ease 0.5s forwards;
+    transition: opacity 0.5s ease;
   }
+  .peak[data-reached] { opacity: 1; }
+  .peak-mark { width: 11px; height: 10px; flex: none; }
+  .peak-mark path { fill: none; stroke: #2e2b27; stroke-width: 1.1; }
+  .peak-text { display: block; line-height: 1.35; white-space: nowrap; }
+  /* A close pair would overlap with both labels to the right, so the leftmost
+     puts its text on the other side. The mark itself never moves. */
+  .peak.is-left {
+    flex-direction: row-reverse;
+    transform: translate(calc(-100% + 4px), -6px);
+  }
+  .peak.is-left .peak-text { text-align: right; }
+  .peak-name { display: block; font-size: 0.72rem; letter-spacing: 0.02em; }
+  .peak-meta { display: block; font-size: 0.62rem; color: #8a8072; }
 
   .intro-bottom {
     position: absolute;
@@ -577,56 +630,65 @@ const copy = {
     left: clamp(1.5rem, 4vw, 3rem);
     right: clamp(1.5rem, 4vw, 3rem);
     display: flex;
-    align-items: center;
+    align-items: flex-end;
     gap: clamp(1rem, 3vw, 2rem);
     opacity: 0;
     animation: intro-fade-in 0.8s ease 0.25s forwards;
   }
-  .intro-caption,
-  .intro-status {
-    font-size: 0.7rem;
-    letter-spacing: 0.22em;
+  .intro-readout {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+    font-size: 0.66rem;
+    letter-spacing: 0.2em;
     text-transform: uppercase;
     white-space: nowrap;
   }
-  .intro-caption { color: var(--fg-dim); }
-  .intro-status {
-    color: var(--accent);
-    min-width: 8.5em;
-    text-align: right;
-    transition: opacity 0.2s ease;
-  }
+  .intro-status { color: #8a8072; }
+  .intro-elev { color: var(--accent); font-variant-numeric: tabular-nums; }
   .intro-bar {
     flex: 1;
     height: 1px;
-    background: rgba(245, 241, 232, 0.12);
+    margin-bottom: 0.45rem;
+    background: rgba(46, 43, 39, 0.16);
     overflow: hidden;
   }
   .intro-bar i {
     display: block;
     height: 100%;
     width: 0%;
-    background: linear-gradient(90deg, var(--accent-deep), var(--accent));
+    background: var(--accent);
+  }
+  .intro-count-wrap {
+    display: inline-flex;
+    align-items: flex-start;
+    gap: 0.12em;
+    line-height: 0.85;
+  }
+  .intro-count {
+    font-size: clamp(2.4rem, 6vw, 3.6rem);
+    font-style: italic;
+    font-variant-numeric: tabular-nums;
+  }
+  .intro-percent {
+    font-size: clamp(0.9rem, 1.8vw, 1.15rem);
+    font-style: italic;
+    color: var(--accent);
+    margin-top: 0.35em;
   }
 
-  /* Exit: chrome lifts away, the number scales off, then the whole panel
-     sweeps up to reveal the hero already sitting behind it. */
+  /* Exit: chrome lifts, then the sheet sweeps up off the footage. */
   .intro.is-leaving .intro-top,
-  .intro.is-leaving .intro-bottom {
+  .intro.is-leaving .intro-bottom,
+  .intro.is-leaving .intro-peaks {
     opacity: 0;
     transform: translateY(-10px);
     transition: opacity 0.45s ease, transform 0.45s ease;
     animation: none;
   }
-  .intro.is-leaving .intro-center {
+  .intro.is-leaving .intro-chart {
     opacity: 0;
-    transform: translateY(-28px) scale(0.94);
-    transition: opacity 0.55s cubic-bezier(0.7, 0, 0.3, 1) 0.1s,
-                transform 0.55s cubic-bezier(0.7, 0, 0.3, 1) 0.1s;
-  }
-  .intro.is-leaving .intro-glow {
-    opacity: 0;
-    transition: opacity 0.5s ease;
+    transition: opacity 0.55s ease 0.1s;
   }
   .intro.is-leaving {
     transform: translateY(-100%);
@@ -634,34 +696,29 @@ const copy = {
   }
 
   @keyframes intro-fade-in { to { opacity: 1; } }
-  @keyframes intro-breathe {
-    0%, 100% { transform: translate(-50%, -50%) scale(0.82); opacity: 0.45; }
-    50%      { transform: translate(-50%, -50%) scale(1.18); opacity: 0.85; }
-  }
 
   @media (max-width: 768px) {
-    /* The meta column is the first thing to go: three tracked rows beside a
-       wordmark do not fit a phone without shrinking both into illegibility. */
+    /* Meta column goes first: three tracked rows beside a wordmark cannot fit a
+       phone without shrinking both into illegibility. */
     .intro-meta { display: none; }
     .intro-bottom {
-      flex-direction: column;
-      align-items: stretch;
-      gap: 0.9rem;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 0.8rem 1rem;
     }
-    .intro-caption, .intro-status { text-align: left; min-width: 0; }
-    /* flex:1 in a column would stretch the rule vertically into nothing
-       visible; it needs an explicit box once the row stacks. */
-    .intro-bar { flex: none; width: 100%; height: 1px; }
+    .intro-bar { order: 3; flex: 1 0 100%; margin-bottom: 0; }
+    .intro-count-wrap { margin-left: auto; }
+    .peak-meta { display: none; }   /* keep the name and the mark, drop the detail */
+    .peak-name { font-size: 0.66rem; }
   }
 
   @media (prefers-reduced-motion: reduce) {
-    .intro-glow { animation: none; }
-    .intro-top, .intro-bottom, .intro-percent { animation: none; opacity: 1; }
+    .intro-top, .intro-bottom, .peak { animation: none; opacity: 1; }
     .intro.is-leaving,
     .intro.is-leaving .intro-top,
     .intro.is-leaving .intro-bottom,
-    .intro.is-leaving .intro-center,
-    .intro.is-leaving .intro-glow { transition: none; transform: none; }
+    .intro.is-leaving .intro-peaks,
+    .intro.is-leaving .intro-chart { transition: none; transform: none; }
   }
 
   .hero-stage {
@@ -1115,18 +1172,53 @@ const copy = {
 
       const countEl = el.querySelector<HTMLElement>('[data-intro-count]');
       const barEl = el.querySelector<HTMLElement>('[data-intro-bar]');
-      const statusEl = el.querySelector<HTMLElement>('[data-intro-status]');
+      const elevEl = el.querySelector<HTMLElement>('[data-intro-elev]');
+      const contours = Array.from(el.querySelectorAll<SVGPathElement>('.contour'));
+      const peakEls = Array.from(el.querySelectorAll<HTMLElement>('.peak'));
+      // Each contour draws across a short window that opens at its own
+      // elevation, so the terrain rises out of the sea rather than every ring
+      // appearing at once. Windows overlap, which is what makes it flow.
+      const DRAW_WINDOW = 0.14;
+      const maxElev = Number(el.dataset.maxElev || 0);
+      const bandCount = Number(el.dataset.bandCount || 1);
+
+      // Peaks are HTML, so their text stays a readable size while the chart
+      // scales. That means resolving preserveAspectRatio's letterbox by hand:
+      // positioning them as a percentage of the container drifts them off the
+      // map, because the SVG is centred inside it rather than filling it.
+      const chartEl = el.querySelector<SVGSVGElement>('.intro-chart');
+      const vx = Number(el.dataset.viewX || 0);
+      const vy = Number(el.dataset.viewY || 0);
+      const vw = Number(el.dataset.viewW || 1);
+      const vh = Number(el.dataset.viewH || 1);
+      function layoutPeaks() {
+        if (!chartEl) return;
+        const r = chartEl.getBoundingClientRect();
+        const k = Math.min(r.width / vw, r.height / vh);
+        const ox = (r.width - vw * k) / 2;
+        const oy = (r.height - vh * k) / 2;
+        for (const pk of peakEls) {
+          const x = ox + (Number(pk.dataset.x || 0) - vx) * k;
+          pk.style.left = `${x}px`;
+          pk.style.top = `${oy + (Number(pk.dataset.y || 0) - vy) * k}px`;
+          // Flip any label that would run off the right edge. On a phone the
+          // eastern summits sit close enough to the frame that the generator's
+          // collision-only side is not enough on its own.
+          // Either reason is enough to flip: the generator's collision check,
+          // or running off the right edge here. Toggling on overflow alone
+          // would undo the collision flip whenever it happens to fit.
+          const w = pk.getBoundingClientRect().width || 170;
+          const overflows = x + w + 12 > r.width;
+          pk.classList.toggle('is-left', pk.dataset.side === 'left' || overflows);
+        }
+      }
+      layoutPeaks();
+      window.addEventListener('resize', layoutPeaks);
       const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
       const MIN_MS = 2000;       // the number deserves long enough to be read
       const MAX_MS = 4200;       // hard ceiling, whatever has or has not arrived
       const FRAME_TARGET = 24;   // enough opening frames for a smooth first scrub
-      const STATUS = [
-        { at: 0,  text: 'Loading' },
-        { at: 40, text: 'The coast' },
-        { at: 75, text: 'The van' },
-        { at: 97, text: 'Ready' },
-      ];
 
       // decode(), not load: it resolves when the image is paintable, which is
       // the difference between a clean reveal and a pop one frame later.
@@ -1144,7 +1236,6 @@ const copy = {
 
       const started = performance.now();
       let shown = 0;
-      let status = '';
       let finished = false;
 
       const real = () => {
@@ -1170,14 +1261,23 @@ const copy = {
         const v = Math.floor(shown);
         if (countEl) countEl.textContent = String(v);
         if (barEl) barEl.style.width = shown + '%';
-        for (let i = STATUS.length - 1; i >= 0; i--) {
-          if (v >= STATUS[i].at) {
-            if (statusEl && STATUS[i].text !== status) {
-              status = STATUS[i].text;
-              statusEl.textContent = status;
-            }
-            break;
-          }
+
+        // The survey climbing Galicia: the number is also an altitude.
+        const p01 = shown / 100;
+        if (elevEl) elevEl.textContent = Math.round(maxElev * p01) + ' m';
+        for (const path of contours) {
+          // Windows are compressed into [0, 1 - DRAW_WINDOW] so the highest
+          // contour still has room to finish by 100%. Mapping band straight to
+          // [0,1] left the summit rings opening exactly as the bar completed,
+          // so the top three never drew at all.
+          const band = (Number(path.dataset.band || 0) / Math.max(1, bandCount - 1))
+            * (1 - DRAW_WINDOW);
+          const t = Math.max(0, Math.min(1, (p01 - band) / DRAW_WINDOW));
+          path.style.strokeDashoffset = String(1 - t);
+        }
+        for (const pk of peakEls) {
+          const reached = Number(pk.dataset.peakElev || 0) <= maxElev * p01;
+          if (reached && !pk.hasAttribute('data-reached')) pk.setAttribute('data-reached', '');
         }
         if (shown >= 100 && elapsed >= MIN_MS) { leave(); return; }
         requestAnimationFrame(tick);
