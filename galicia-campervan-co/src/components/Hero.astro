@@ -123,7 +123,7 @@ const copy = {
       },
       closing: {
         eyebrow: 'The keys',
-        title: "It's in A Coruña. You choose where it goes.",
+        title: 'You start in A Coruña. You choose where after.',
         body: [
           'Take it for a few days, head wherever you like, and bring it back when your trip is done.',
           'We built the van, we look after it, and we answer our own emails. Usually within a day.',
@@ -206,7 +206,7 @@ const copy = {
       },
       closing: {
         eyebrow: 'The keys',
-        title: "It's in A Coruña. You choose where it goes.",
+        title: 'You start in A Coruña. You choose where after.',
         body: [
           'Take it for a few days, head wherever you like, and bring it back when your trip is done.',
           'We built the van, we look after it, and we answer our own emails. Usually within a day.',
@@ -473,6 +473,19 @@ const copy = {
     letter-spacing: -0.02em;
     color: var(--fg);
     text-shadow: 0 2px 28px rgba(0, 0, 0, 0.6);
+  }
+  /* These three headlines are the ones long enough to wrap and orphan a word
+     at normal size — sized down just enough (measured, not eyeballed) to sit
+     on one line at both a phone and a wide desktop, instead of shrinking every
+     headline on the site. */
+  .copy-block[data-copy-mode='hire'][data-copy-id='welcome'] .copy-title {
+    font-size: clamp(1.5rem, 4.6vw, 3.35rem);
+  }
+  .copy-block[data-copy-mode='hire'][data-copy-id='exterior'] .copy-title {
+    font-size: clamp(1.3rem, 4.1vw, 2.9rem);
+  }
+  .copy-block[data-copy-mode='build'][data-copy-id='welcome'] .copy-title {
+    font-size: clamp(1.25rem, 3.9vw, 2.7rem);
   }
   .copy-body {
     margin-top: 1rem;
