@@ -53,8 +53,8 @@ REF_SEQ = 'public/sequences/hire'          # 1920x1080, used to derive the masks
 FPS = 12
 REF_W, REF_H = 1920, 1080
 
-DILATE = 15                                # see note 2 above
-INPAINT_RADIUS = 10
+DILATE = 25                                # see note 2 above
+INPAINT_RADIUS = 12
 BRIGHT_OVER_LOCAL = 6                      # mark is brighter than its surround
 PRESENT_IN_FRACTION = 0.75                 # burned in, not passing scene detail
 DETECT_SIGMA = 3.0                         # frames scoring above clean baseline
@@ -158,8 +158,19 @@ def main():
 
     if not os.path.exists(SRC):
         sys.exit(f'missing {SRC}')
-    files = sorted(glob.glob(os.path.join(REF_SEQ, '*.webp')))
+
+    # Reference frames come from the master, never from public/sequences: this
+    # script overwrites that directory, so learning masks from it would mean a
+    # second run derives them from already-painted frames and finds nothing.
+    ref_tmp = tempfile.mkdtemp(prefix='wm-ref-')
+    print(f'extracting reference frames at {REF_W}px…', flush=True)
+    subprocess.run(
+        ['ffmpeg', '-v', 'error', '-i', SRC,
+         '-vf', f'fps={FPS},scale={REF_W}:-2', '-c:v', 'png',
+         '-y', os.path.join(ref_tmp, '%04d.png')], check=True)
+    files = sorted(glob.glob(os.path.join(ref_tmp, '*.png')))
     if len(files) != 457:
+        shutil.rmtree(ref_tmp, ignore_errors=True)
         sys.exit(f'expected 457 reference frames, found {len(files)}')
 
     # ---- masks, and which frames each mark is actually on -------------------
@@ -192,6 +203,7 @@ def main():
     print(f'  union {100*(full>0).mean():.2f}% of frame; '
           f'{len(per_frame)}/457 frames painted', flush=True)
     if args.dry_run:
+        shutil.rmtree(ref_tmp, ignore_errors=True)
         return
 
     # ---- scrub tiers --------------------------------------------------------
@@ -200,14 +212,18 @@ def main():
             continue
         out_dir, w, q = TIERS[tier]
         m_tier = {i: scaled(m, w) for i, m in per_frame.items()}
-        tmp = tempfile.mkdtemp(prefix=f'wm-{tier}-')
+        reuse = (w == REF_W)
+        tmp = ref_tmp if reuse else tempfile.mkdtemp(prefix=f'wm-{tier}-')
         try:
-            print(f'\n{tier}: extracting {w}px from the master as PNG…', flush=True)
-            subprocess.run(
-                ['ffmpeg', '-v', 'error', '-i', SRC,
-                 '-vf', f'fps={FPS},scale={w}:-2', '-c:v', 'png',
-                 '-y', os.path.join(tmp, '%04d.png')],
-                check=True)
+            if reuse:
+                print(f'\n{tier}: reusing the {w}px reference frames…', flush=True)
+            else:
+                print(f'\n{tier}: extracting {w}px from the master as PNG…', flush=True)
+                subprocess.run(
+                    ['ffmpeg', '-v', 'error', '-i', SRC,
+                     '-vf', f'fps={FPS},scale={w}:-2', '-c:v', 'png',
+                     '-y', os.path.join(tmp, '%04d.png')],
+                    check=True)
             made = sorted(glob.glob(os.path.join(tmp, '*.png')))
             if len(made) != 457:
                 sys.exit(f'{tier}: extracted {len(made)} frames, expected 457')
@@ -226,8 +242,13 @@ def main():
             print(f'{tier}: done -> {out_dir}', flush=True)
         finally:
             shutil.rmtree(tmp, ignore_errors=True)
+            if reuse:
+                ref_tmp = None
 
     # ---- sharp station stills ----------------------------------------------
+    if ref_tmp:
+        shutil.rmtree(ref_tmp, ignore_errors=True)
+
     if 'stations' in want:
         print('\nstations: re-extracting view + closing at 3840…', flush=True)
         m_st = scaled(full, STATION_W)
