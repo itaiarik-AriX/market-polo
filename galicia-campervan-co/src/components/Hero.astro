@@ -441,23 +441,34 @@ const copy = {
   </div>
 </section>
 
-{/* The intro hold. Deliberately NOT a preloader: waiting for the whole
-    sequence would be 21s at 25Mbps and 53s at 10Mbps. It waits only for the
-    landing still — the thing you actually look at — and gives up after
-    INTRO_MAX_MS regardless, so a slow connection is never trapped behind it.
-    The progressive loader keeps filling in behind, exactly as before. */}
+{/* The intro. Deliberately NOT a full preloader: waiting for the whole sequence
+    would be 21s at 25Mbps and 53s at 10Mbps. The counter is driven by what has
+    genuinely arrived — the landing still, then the opening scrub frames — and
+    gives up at INTRO_MAX_MS regardless, so a slow connection is never trapped.
+    The progressive loader keeps filling in behind it, exactly as before. */}
 <div class="intro" data-intro role="presentation">
-  <div class="intro-inner">
-    <img
-      class="intro-mark"
-      src="/logo-light.webp"
-      alt=""
-      width="560"
-      height="534"
-      fetchpriority="high"
-      decoding="async"
-    />
-    <span class="intro-rule" aria-hidden="true"><i></i></span>
+  <div class="intro-glow" aria-hidden="true"></div>
+
+  <div class="intro-top">
+    <div class="intro-brand serif">Coruña <em>Campervan</em></div>
+    <div class="intro-meta">
+      <span class="intro-meta-row"><span class="dash">—</span> Campervan hire</span>
+      <span class="intro-meta-row"><span class="dash">—</span> A Coruña, Galicia</span>
+      <span class="intro-meta-row"><span class="dash">—</span> Est. 2026</span>
+    </div>
+  </div>
+
+  <div class="intro-center">
+    <span class="intro-count-wrap">
+      <span class="intro-count serif" data-intro-count>0</span>
+      <span class="intro-percent serif">%</span>
+    </span>
+  </div>
+
+  <div class="intro-bottom">
+    <div class="intro-caption">Take the van. Follow the coast.</div>
+    <div class="intro-bar"><i data-intro-bar></i></div>
+    <div class="intro-status" data-intro-status>Loading</div>
   </div>
 </div>
 
@@ -466,77 +477,191 @@ const copy = {
     position: relative;
     height: 900vh; /* total scroll distance; more = slower, more cinematic scrub */
   }
-  /* ---- intro hold -------------------------------------------------------
-     Sits above the header (100) and the gallery (200), below the compass
-     cursor (9999) — the cursor should still be the cursor while it shows. */
+  /* ---- intro -----------------------------------------------------------
+     Above the header (100) and the gallery (200), below the compass cursor
+     (9999) — the cursor stays the cursor while this is up. */
   .intro {
     position: fixed;
     inset: 0;
     z-index: 500;
-    display: grid;
-    place-items: center;
     background: var(--bg);
-    opacity: 1;
-    transition: opacity 0.42s ease;
+    padding: clamp(1.5rem, 4vw, 3rem);
+    overflow: hidden;
+    transform: translateY(0);
   }
-  .intro[data-done] {
-    opacity: 0;
+  .intro[hidden] { display: none; }
+
+  /* A slow breath behind everything, so the panel is never a flat rectangle. */
+  .intro-glow {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: min(1000px, 140vw);
+    aspect-ratio: 1;
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+    background: radial-gradient(circle, rgba(224, 137, 79, 0.09) 0%, transparent 62%);
+    animation: intro-breathe 3.4s ease-in-out infinite;
     pointer-events: none;
   }
-  .intro[hidden] {
-    display: none;
-  }
-  .intro-inner {
+
+  .intro-top {
+    position: absolute;
+    top: clamp(1.5rem, 4vw, 3rem);
+    left: clamp(1.5rem, 4vw, 3rem);
+    right: clamp(1.5rem, 4vw, 3rem);
     display: flex;
-    flex-direction: column;
-    align-items: center;
-    /* Optically centred rather than mathematically: a mark sitting dead-centre
-       reads low, and on a phone the browser chrome eats the bottom. */
-    transform: translateY(-4vh);
-  }
-  .intro-mark {
-    width: clamp(112px, 26vw, 188px);
-    height: auto;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 1.5rem;
     opacity: 0;
-    animation: intro-mark-in 0.7s ease 0.05s forwards;
+    animation: intro-fade-in 0.8s ease 0.1s forwards;
   }
-  /* The hairline. An indeterminate sweep, not a percentage: the honest number
-     would be dominated by frames the visitor does not need yet, and a counter
-     invites watching it. */
-  .intro-rule {
-    display: block;
-    position: relative;
-    margin-top: clamp(1.1rem, 3vh, 1.9rem);
-    width: clamp(96px, 22vw, 150px);
-    height: 1px;
-    overflow: hidden;
-    background: rgba(245, 241, 232, 0.14);
+  .intro-brand {
+    font-size: clamp(1.05rem, 2.4vw, 1.5rem);
+    letter-spacing: -0.02em;
+    color: var(--fg);
   }
-  .intro-rule i {
+  .intro-brand em { font-style: italic; }
+  .intro-meta {
+    text-align: right;
+    font-size: 0.7rem;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--fg-dim);
+    line-height: 1.9;
+  }
+  .intro-meta-row { display: block; }
+  .intro-meta-row .dash { color: var(--accent); margin-right: 0.45rem; }
+
+  /* The number is the whole design. Everything else is framing. */
+  .intro-center {
     position: absolute;
     inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  /* The pair needs its own box. Aligning the % against .intro-center — which is
+     inset:0, i.e. the whole viewport — parks it at the top of the screen
+     instead of at the top of the digits. */
+  .intro-count-wrap {
+    display: inline-flex;
+    align-items: flex-start;
+    /* Italic digits overhang to the right, so a hairline gap reads as a
+       collision at three digits. */
+    gap: 0.2em;
+  }
+  .intro-count {
+    font-size: clamp(5.5rem, 22vw, 18rem);
+    font-style: italic;
+    font-weight: 400;
+    line-height: 0.85;
+    letter-spacing: -0.06em;
+    color: var(--fg);
+    font-variant-numeric: tabular-nums;
+  }
+  .intro-percent {
+    font-size: clamp(1.8rem, 5vw, 4rem);
+    font-style: italic;
+    color: var(--accent);
+    line-height: 1;
+    margin-top: 0.42em;
+    opacity: 0;
+    animation: intro-fade-in 0.5s ease 0.5s forwards;
+  }
+
+  .intro-bottom {
+    position: absolute;
+    bottom: clamp(1.5rem, 4vw, 3rem);
+    left: clamp(1.5rem, 4vw, 3rem);
+    right: clamp(1.5rem, 4vw, 3rem);
+    display: flex;
+    align-items: center;
+    gap: clamp(1rem, 3vw, 2rem);
+    opacity: 0;
+    animation: intro-fade-in 0.8s ease 0.25s forwards;
+  }
+  .intro-caption,
+  .intro-status {
+    font-size: 0.7rem;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+  .intro-caption { color: var(--fg-dim); }
+  .intro-status {
+    color: var(--accent);
+    min-width: 8.5em;
+    text-align: right;
+    transition: opacity 0.2s ease;
+  }
+  .intro-bar {
+    flex: 1;
+    height: 1px;
+    background: rgba(245, 241, 232, 0.12);
+    overflow: hidden;
+  }
+  .intro-bar i {
     display: block;
-    background: linear-gradient(
-      90deg,
-      transparent,
-      var(--accent) 45%,
-      var(--accent) 55%,
-      transparent
-    );
-    transform: translateX(-100%);
-    animation: intro-sweep 1.25s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+    height: 100%;
+    width: 0%;
+    background: linear-gradient(90deg, var(--accent-deep), var(--accent));
   }
-  @keyframes intro-mark-in {
-    from { opacity: 0; transform: scale(0.97); }
-    to   { opacity: 0.94; transform: none; }
+
+  /* Exit: chrome lifts away, the number scales off, then the whole panel
+     sweeps up to reveal the hero already sitting behind it. */
+  .intro.is-leaving .intro-top,
+  .intro.is-leaving .intro-bottom {
+    opacity: 0;
+    transform: translateY(-10px);
+    transition: opacity 0.45s ease, transform 0.45s ease;
+    animation: none;
   }
-  @keyframes intro-sweep {
-    to { transform: translateX(100%); }
+  .intro.is-leaving .intro-center {
+    opacity: 0;
+    transform: translateY(-28px) scale(0.94);
+    transition: opacity 0.55s cubic-bezier(0.7, 0, 0.3, 1) 0.1s,
+                transform 0.55s cubic-bezier(0.7, 0, 0.3, 1) 0.1s;
   }
+  .intro.is-leaving .intro-glow {
+    opacity: 0;
+    transition: opacity 0.5s ease;
+  }
+  .intro.is-leaving {
+    transform: translateY(-100%);
+    transition: transform 1.05s cubic-bezier(0.76, 0, 0.24, 1) 0.42s;
+  }
+
+  @keyframes intro-fade-in { to { opacity: 1; } }
+  @keyframes intro-breathe {
+    0%, 100% { transform: translate(-50%, -50%) scale(0.82); opacity: 0.45; }
+    50%      { transform: translate(-50%, -50%) scale(1.18); opacity: 0.85; }
+  }
+
+  @media (max-width: 768px) {
+    /* The meta column is the first thing to go: three tracked rows beside a
+       wordmark do not fit a phone without shrinking both into illegibility. */
+    .intro-meta { display: none; }
+    .intro-bottom {
+      flex-direction: column;
+      align-items: stretch;
+      gap: 0.9rem;
+    }
+    .intro-caption, .intro-status { text-align: left; min-width: 0; }
+    /* flex:1 in a column would stretch the rule vertically into nothing
+       visible; it needs an explicit box once the row stacks. */
+    .intro-bar { flex: none; width: 100%; height: 1px; }
+  }
+
   @media (prefers-reduced-motion: reduce) {
-    .intro { transition: none; }
-    .intro-mark { animation: none; opacity: 0.94; }
-    .intro-rule i { animation: none; transform: none; opacity: 0.5; }
+    .intro-glow { animation: none; }
+    .intro-top, .intro-bottom, .intro-percent { animation: none; opacity: 1; }
+    .intro.is-leaving,
+    .intro.is-leaving .intro-top,
+    .intro.is-leaving .intro-bottom,
+    .intro.is-leaving .intro-center,
+    .intro.is-leaving .intro-glow { transition: none; transform: none; }
   }
 
   .hero-stage {
@@ -864,51 +989,6 @@ const copy = {
   function initHero() {
     const canvas = document.querySelector<HTMLCanvasElement>('[data-hero-canvas]');
     const track = document.querySelector<HTMLElement>('[data-hero-track]');
-    // ---- intro hold ------------------------------------------------------
-    // Gated on the landing still, never on the sequence. Three bounds, all of
-    // which matter: a MINIMUM so it cannot flash on a fast connection, a
-    // MAXIMUM so it cannot trap anyone on a slow one, and a once-per-session
-    // flag so it stays a first impression rather than a toll booth.
-    const INTRO_MIN_MS = 420;
-    const INTRO_MAX_MS = 2500;
-    const introEl = document.querySelector<HTMLElement>('[data-intro]');
-    if (introEl) {
-      let seen = false;
-      try { seen = sessionStorage.getItem('intro-seen') === '1'; } catch {}
-      const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-      if (seen) {
-        introEl.hidden = true;
-      } else {
-        const started = performance.now();
-        let dismissed = false;
-        const dismiss = () => {
-          if (dismissed) return;
-          dismissed = true;
-          try { sessionStorage.setItem('intro-seen', '1'); } catch {}
-          const wait = Math.max(0, INTRO_MIN_MS - (performance.now() - started));
-          window.setTimeout(() => {
-            introEl.dataset.done = '';
-            // Leave the DOM only after the fade, so nothing flickers back.
-            window.setTimeout(() => { introEl.hidden = true; }, reduced ? 0 : 460);
-          }, wait);
-        };
-        // The landing still is the whole point of waiting: it is what fills the
-        // screen. decode() resolves when it is actually paintable, not merely
-        // downloaded, which is the difference between a clean reveal and a pop.
-        const first = document.querySelector<HTMLImageElement>('[data-still-eager]');
-        const ready = first
-          ? (first.complete ? first.decode().catch(() => {}) : new Promise<void>((res) => {
-              first.addEventListener('load', () => first.decode().then(() => res(), () => res()), { once: true });
-              first.addEventListener('error', () => res(), { once: true });
-            }))
-          : Promise.resolve();
-        Promise.race([
-          ready,
-          new Promise((res) => window.setTimeout(res, INTRO_MAX_MS)),
-        ]).then(dismiss, dismiss);
-      }
-    }
-
     const scrollCue = document.querySelector<HTMLElement>('[data-scroll-cue]');
     const blocks = Array.from(document.querySelectorAll<HTMLElement>('.copy-block'));
     const stills = Array.from(document.querySelectorAll<HTMLElement>('.station-still'));
@@ -1017,6 +1097,94 @@ const copy = {
       return 1;
     }
 
+    // ---- intro -----------------------------------------------------------
+    // The counter is real: it tracks the landing still decoding and the opening
+    // scrub frames arriving. It is NOT a fixed animation — on a fast connection
+    // it genuinely finishes early, and on a slow one INTRO_MAX_MS gives up and
+    // runs to 100 anyway so nobody is held hostage by 63MB of frames.
+    function initIntro(scrub: { getDebugState: () => { loadedCount: number } }) {
+      const el = document.querySelector<HTMLElement>('[data-intro]');
+      if (!el) return;
+
+      // Once per tab session: a plain reload should not replay it. Closing the
+      // tab (or a new one) brings it back, which is the "new visit" case.
+      let seen = false;
+      try { seen = sessionStorage.getItem('intro-seen') === '1'; } catch {}
+      if (seen) { el.hidden = true; return; }
+      try { sessionStorage.setItem('intro-seen', '1'); } catch {}
+
+      const countEl = el.querySelector<HTMLElement>('[data-intro-count]');
+      const barEl = el.querySelector<HTMLElement>('[data-intro-bar]');
+      const statusEl = el.querySelector<HTMLElement>('[data-intro-status]');
+      const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+      const MIN_MS = 2000;       // the number deserves long enough to be read
+      const MAX_MS = 4200;       // hard ceiling, whatever has or has not arrived
+      const FRAME_TARGET = 24;   // enough opening frames for a smooth first scrub
+      const STATUS = [
+        { at: 0,  text: 'Loading' },
+        { at: 40, text: 'The coast' },
+        { at: 75, text: 'The van' },
+        { at: 97, text: 'Ready' },
+      ];
+
+      // decode(), not load: it resolves when the image is paintable, which is
+      // the difference between a clean reveal and a pop one frame later.
+      let stillReady = false;
+      const firstStill = document.querySelector<HTMLImageElement>('[data-still-eager]');
+      const markStill = () => { stillReady = true; };
+      if (!firstStill) {
+        stillReady = true;
+      } else if (firstStill.complete) {
+        firstStill.decode().then(markStill, markStill);
+      } else {
+        firstStill.addEventListener('load', () => firstStill.decode().then(markStill, markStill), { once: true });
+        firstStill.addEventListener('error', markStill, { once: true });
+      }
+
+      const started = performance.now();
+      let shown = 0;
+      let status = '';
+      let finished = false;
+
+      const real = () => {
+        const frames = Math.min(1, scrub.getDebugState().loadedCount / FRAME_TARGET);
+        return 0.55 * (stillReady ? 1 : 0) + 0.45 * frames;
+      };
+
+      function leave() {
+        if (finished) return;
+        finished = true;
+        el.classList.add('is-leaving');
+        window.setTimeout(() => { el.hidden = true; }, reduced ? 0 : 1600);
+      }
+
+      function tick() {
+        const elapsed = performance.now() - started;
+        const done = real() >= 0.999 || elapsed >= MAX_MS;
+        // Hold just under 100 until genuinely ready, so the number never claims
+        // to be finished while it is still waiting.
+        const target = done ? 100 : Math.min(96, real() * 100);
+        shown += (target - shown) * 0.09;
+        if (target === 100 && 100 - shown < 0.5) shown = 100;
+        const v = Math.floor(shown);
+        if (countEl) countEl.textContent = String(v);
+        if (barEl) barEl.style.width = shown + '%';
+        for (let i = STATUS.length - 1; i >= 0; i--) {
+          if (v >= STATUS[i].at) {
+            if (statusEl && STATUS[i].text !== status) {
+              status = STATUS[i].text;
+              statusEl.textContent = status;
+            }
+            break;
+          }
+        }
+        if (shown >= 100 && elapsed >= MIN_MS) { leave(); return; }
+        requestAnimationFrame(tick);
+      }
+      requestAnimationFrame(tick);
+    }
+
     const scrubber = createScrollScrubber({
       canvas,
       track,
@@ -1084,6 +1252,10 @@ const copy = {
         }
       },
     });
+
+    // Started only once the scrubber exists, since the counter reads its real
+    // loaded-frame count.
+    initIntro(scrubber);
 
     if (nav) {
       // Jumping the page is allowed HERE and nowhere else. What was removed from
