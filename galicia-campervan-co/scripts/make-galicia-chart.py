@@ -13,24 +13,43 @@ terrain that does not exist.
 Pipeline, with the parts that are load-bearing flagged:
 
   geojson -> rasterise all four provinces into ONE mask (their union comes free,
-             no polygon-boolean library needed; shapely is not available)
-          -> chamfer 3-4 distance transform, signed: + inland, - offshore.
-             4-neighbour erosion instead gives Manhattan diamonds, not terrain.
-          -> elevation = 0.85 x (rise away from the coast)
-                       + 0.55 x (Gaussian per massif, scaled by its height)
-             Weighting the peaks at 1.0 empties the west, because Galicia's
-             massifs are all inland and east.
+             no polygon-boolean library needed; shapely is not available), and
+             ALL of Spain into a second mask, purely to know which parts of the
+             outline are coast and which are the land border.
+          -> chamfer 3-4 distance transform from the OCEAN, signed. 4-neighbour
+             erosion instead gives Manhattan diamonds, not terrain.
+          -> elevation = 0.85 x (rise away from the coast, flattened above 0.60
+                                 of its range)
+                       + 0.60 x (Gaussian per massif, scaled by its height)
+             The two terms split the province between them: the ramp draws the
+             west, where there are no summits to draw it, and goes level across
+             the eastern uplands so the peaks shape the ground there. One term
+             alone cannot do both — see the two failure modes below.
           -> light blur only. Heavier smoothing erases the rias, which are the
              most recognisable thing about this coast.
-          -> marching squares at levels spaced (k/17)^0.78, denser on low
+          -> marching squares at levels spaced (k/15)^0.78, denser on low
              ground. Even spacing puts nearly every line around the summits.
+          -> clip the traced lines to Galicia, so contours run off the eastern
+             border and stop rather than being crushed into it.
           -> Chaikin, then per-ring RDP (tolerance scaled to ring perimeter: one
              global epsilon flattens small loops into visible polygons)
           -> Catmull-Rom fitted to cubic Beziers. Straight segments look faceted
              however many points are kept.
 
-Only levels >= 0 are extracted: contours belong on Galicia, and empty ground
-around it reads as sea without drawing anything.
+Two failure modes this has already been through, both visible on a phone:
+
+  * Measuring the rise from the whole OUTLINE treats the land border as
+    shoreline. Pena Trevinca stands on that border, so all 2127m had to fall
+    away within ~12 units of it: fourteen contour levels inside 12 CSS pixels,
+    merged into one dark smear. Measured: 10 of 15 gaps below 2px, the tightest
+    0.07px.
+  * Measuring from the ocean alone fixes the smear but makes the field a smooth
+    west-to-east ramp, whose level sets are parallel bands. The summits vanish
+    and the map reads as stripes. Hence the cap, which is what keeps both.
+
+The silhouette is traced from the land mask itself, not from the zero crossing:
+with a field that stays high at the border there is no zero crossing on the
+eastern side, and the outline would have been left open.
 
 The field is computed on a PADDED canvas and cropped. Computed at the visible
 size, the offshore distance is clipped by the raster border and leaves dense
@@ -76,22 +95,27 @@ MAX_ELEV = max(p[3] for p in PEAKS)
 # Mostallar straddles the Lugo/Leon border, so it samples just outside the
 # rasterised polygon and its mark sits on the outline. That is correct.
 
-N_LAND_LEVELS = 17
+# 15, not 17. The count is a legibility budget as much as a style choice: at 17
+# the saddle west of Manzaneda closed to 0.50px between lines, which renders as
+# one thick stroke. Measured across all three summits, 17 left 6 sub-2px gaps
+# and 15 leaves 1, at 1.72px. Below 15 it gets worse again, not better.
+N_LAND_LEVELS = 15
 
 
-def load_rings(path):
+def load_rings(path, names=None, want=0):
+    """Outer rings of the named provinces, or of every province if names is None."""
     d = json.load(open(path, encoding='utf-8'))
     rings = []
     for f in d['features']:
-        if f['properties'].get('name') not in PROVINCES:
+        if names is not None and f['properties'].get('name') not in names:
             continue
         g = f['geometry']
         polys = g['coordinates'] if g['type'] == 'MultiPolygon' else [g['coordinates']]
         for poly in polys:
             if len(poly[0]) > 40:
                 rings.append(poly[0])
-    if len(rings) < 4:
-        sys.exit(f'expected 4 province rings, found {len(rings)}')
+    if want and len(rings) < want:
+        sys.exit(f'expected {want} province rings, found {len(rings)}')
     return rings
 
 
@@ -271,6 +295,15 @@ def dms(v, pos, neg):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--geojson', default='')
+    ap.add_argument('--out', default=OUT)
+    # Relief shape, exposed so it can be swept against a rendered preview rather
+    # than tuned blind through a browser. See the field below for what each does.
+    ap.add_argument('--coastal', type=float, default=0.85)
+    ap.add_argument('--peaks', type=float, default=0.60)
+    ap.add_argument('--cap', type=float, default=0.60)
+    ap.add_argument('--sigma', type=float, default=20.0)
+    ap.add_argument('--sigma-scale', type=float, default=22.0)
+    ap.add_argument('--levels', type=int, default=N_LAND_LEVELS)
     args = ap.parse_args()
 
     path = args.geojson
@@ -282,8 +315,11 @@ def main():
         print('fetching province boundaries…', flush=True)
         subprocess.run(['curl', '-sSf', '-o', path, GEOJSON_URL], check=True)
 
-    rings = load_rings(path)
-    print(f'{len(rings)} province rings', flush=True)
+    rings = load_rings(path, PROVINCES, want=4)
+    # Every OTHER Spanish province too, purely to know where Galicia stops being
+    # coast and starts being border. See the distance field below.
+    neighbours = load_rings(path, None)
+    print(f'{len(rings)} province rings, {len(neighbours)} rings of Spain', flush=True)
 
     xs = [p[0] for r in rings for p in r]
     ys = [p[1] for r in rings for p in r]
@@ -299,48 +335,140 @@ def main():
     def place(lat, lon):
         return (((lon - lon0) * math.cos(latm)) * s + ox, (lat1 - lat) * s + oy)
 
-    img = Image.new('L', (W, H), 0)
-    dr = ImageDraw.Draw(img)
-    for r in proj:
-        dr.polygon([(p[0] * s + ox, p[1] * s + oy) for p in r], fill=255)
-    land = np.asarray(img) > 127
+    def rasterise(rs):
+        im = Image.new('L', (W, H), 0)
+        d_ = ImageDraw.Draw(im)
+        for r in rs:
+            d_.polygon([place(p[1], p[0]) for p in r], fill=255)
+        return np.asarray(im) > 127
+
+    land = rasterise(rings)
+    iberia = rasterise(neighbours)
 
     print('distance field…', flush=True)
-    signed = np.where(land, chamfer(land.tolist()), -chamfer((~land).tolist()))
+    yy, xx = np.mgrid[0:H, 0:W].astype(np.float32)
+
+    # Only the ATLANTIC is sea. Galicia meets the ocean on its west and north
+    # sides; east and south-east it meets the rest of Iberia, which emphatically
+    # does not drop to sea level — Pena Trevinca stands ON that border, and the
+    # border there runs along the ridge itself.
+    #
+    # Measuring "rise away from the coast" against the whole outline treated
+    # that land border as shoreline, so all 2127m of relief had to fall away
+    # inside the ~12 units between the summit and the edge. Fourteen contour
+    # levels then landed within 12 CSS pixels on a phone and merged into a
+    # single dark smear.
+    #
+    # The neighbouring provinces give the real border for free: sea is simply
+    # where no province is. Deriving it beats thresholding longitude, which puts
+    # a straight crease through the field along the threshold line and leaves
+    # visibly ruled contours.
+    #
+    # Portugal is not in this dataset, so the southern border reads as sea. That
+    # is the right answer anyway — it is the Mino valley, which really is low.
+    sea = ~iberia
+    signed = np.where(iberia, chamfer(iberia.tolist()), -chamfer(sea.tolist()))
     signed = blur(signed.astype(np.float32), 2, 2)
 
-    yy, xx = np.mgrid[0:H, 0:W].astype(np.float32)
+    # Normalised against Galicia itself, not the whole padded canvas: the field
+    # keeps climbing east past the border now, and scaling by that maximum would
+    # flatten the province into the bottom of the range.
     coastal = np.clip(signed, 0, None)
-    coastal = coastal / max(1e-6, coastal.max())
-    elev = coastal * 0.85
+    coastal = coastal / max(1e-6, float(coastal[land].max()))
+
+    # Distance-from-the-ocean rises steadily west to east, so on its own its
+    # level sets are north-south bands sweeping the whole province — at the old
+    # 0.85 weight it swamped the summits and the map read as parallel stripes
+    # with no rings at all.
+    #
+    # --cap flattens it above a fraction of its range: the ramp then draws the
+    # western half, where there are no summits to draw it, and goes level across
+    # the eastern uplands so the peaks are what shapes the ground there. That
+    # split is what gets contours across the whole province AND rings on the
+    # mountains, which measuring from a single source cannot do.
+    if args.cap < 1.0:
+        coastal = np.minimum(coastal, args.cap) / args.cap
+    elev = coastal * args.coastal
     for _, lat, lon, m in PEAKS:
         cx, cy = place(lat, lon)
-        sigma = 26 + 30 * (m / MAX_ELEV)
+        sigma = args.sigma + args.sigma_scale * (m / MAX_ELEV)
         elev += np.exp(-(((xx - cx) ** 2 + (yy - cy) ** 2) / (2 * sigma * sigma))) \
-            * (m / MAX_ELEV) * 0.55
-    elev = blur(elev * land, 2, 2) * land
-    field = np.where(land, elev * 140.0, signed).astype(np.float32)
+            * (m / MAX_ELEV) * args.peaks
+    # Blurred WITHOUT masking to land first: multiplying by the mask here is what
+    # pinned the field to zero along the border, which is the whole defect. The
+    # contours are cut to Galicia after tracing instead.
+    elev = blur(elev, 2, 2)
+    field = np.where(sea, signed, elev * 140.0).astype(np.float32)
 
-    hi = field.max()
-    levels = [0.0] + [hi * ((k / float(N_LAND_LEVELS)) ** 0.78)
-                      for k in range(1, N_LAND_LEVELS + 1)]
+    hi = float((elev * 140.0)[land].max())
+    levels = [hi * ((k / float(args.levels)) ** 0.78)
+              for k in range(1, args.levels + 1)]
+
+    def clip_to_land(line, closed):
+        """Cut a traced contour down to the parts that lie on Galicia.
+
+        The field is now continuous across the land border, so contours run off
+        the eastern edge instead of being compressed into it. They are trimmed
+        here, which is how a regional map reads anyway: lines that meet the
+        frame and stop.
+        """
+        inside = []
+        for x, y in line:
+            ix, iy = int(round(x)), int(round(y))
+            inside.append(0 <= iy < H and 0 <= ix < W and bool(land[iy, ix]))
+        if all(inside):
+            return [(line, closed)]
+        runs, cur = [], []
+        for pt, ok in zip(line, inside):
+            if ok:
+                cur.append(pt)
+            elif cur:
+                runs.append(cur)
+                cur = []
+        if cur:
+            runs.append(cur)
+        # A closed ring cut open at the border has its start and end in the same
+        # run; rejoin them so it is not drawn as two strokes meeting at a seam.
+        if closed and len(runs) > 1 and inside[0] and inside[-1]:
+            runs[0] = runs[-1] + runs[0]
+            runs.pop()
+        return [(r, False) for r in runs if len(r) > 3]
 
     print('tracing contours…', flush=True)
+    # The silhouette comes from the land mask itself. It used to be the level-0
+    # crossing, which worked only while the field was forced to zero all the way
+    # round; with a continuous field there is no zero crossing on the eastern
+    # side, and the outline would have been left open.
     bands = []
-    for li, lv in enumerate(levels):
+    outline = []
+    # Lightly blurred first: marching a hard binary mask gives a pixel staircase,
+    # and the rias are too fine to survive being smoothed after the fact.
+    for line in marching(blur(land.astype(np.float32), 1, 1), 0.5):
+        p = [((x - PADX) * SC, (y - PADY) * SC) for x, y in chaikin(line, 2)]
+        per = sum(math.dist(p[i], p[i + 1]) for i in range(len(p) - 1))
+        p = rdp(p, max(0.6, min(2.6, per / 300)))
+        if len(p) < 7:
+            continue
+        b = bezier(p, math.dist(p[0], p[-1]) < 3)
+        if b:
+            outline.append(b)
+    if outline:
+        bands.append({'i': 0, 'coast': True, 'd': outline})
+
+    for li, lv in enumerate(levels, start=1):
         paths = []
         for line in marching(field, lv):
-            closed = math.dist(line[0], line[-1]) < 3
-            p = [((x - PADX) * SC, (y - PADY) * SC) for x, y in chaikin(line, 2)]
-            per = sum(math.dist(p[i], p[i + 1]) for i in range(len(p) - 1))
-            p = rdp(p, max(0.6, min(2.6, per / 300)))
-            if len(p) < 7:
-                continue
-            b = bezier(p, closed)
-            if b:
-                paths.append(b)
+            for seg, closed in clip_to_land(line, math.dist(line[0], line[-1]) < 3):
+                p = [((x - PADX) * SC, (y - PADY) * SC) for x, y in chaikin(seg, 2)]
+                per = sum(math.dist(p[i], p[i + 1]) for i in range(len(p) - 1))
+                p = rdp(p, max(0.6, min(2.6, per / 300)))
+                if len(p) < 7:
+                    continue
+                b = bezier(p, closed)
+                if b:
+                    paths.append(b)
         if paths:
-            bands.append({'i': li, 'coast': li == 0, 'd': paths})
+            bands.append({'i': li, 'coast': False, 'd': paths})
 
     OW, OH = VW * SC, VH * SC
     coords = []
@@ -415,10 +543,10 @@ export const CHART_BANDS: ChartBand[] = {json.dumps(
 
 export const CHART_PEAKS: ChartPeak[] = {json.dumps(peaks, ensure_ascii=False)};
 '''
-    os.makedirs(os.path.dirname(OUT), exist_ok=True)
-    with open(OUT, 'w', encoding='utf-8') as fh:
+    os.makedirs(os.path.dirname(args.out), exist_ok=True)
+    with open(args.out, 'w', encoding='utf-8') as fh:
         fh.write(ts)
-    print(f'wrote {OUT} ({len(ts) / 1024:.1f} KB)')
+    print(f'wrote {args.out} ({len(ts) / 1024:.1f} KB)')
     if tmp:
         os.unlink(tmp.name)
 
