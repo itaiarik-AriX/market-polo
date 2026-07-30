@@ -505,11 +505,13 @@ const copy = {
     ))}
   </svg>
 
+  {/* Which side a label sits on is decided at runtime by layoutPeaks, not baked
+      in here: the generator cannot know how wide the text renders or how much
+      frame there is beside it at the viewport in use. */}
   <div class="intro-peaks">
     {CHART_PEAKS.map((pk) => (
       <div
-        class:list={['peak', pk.side === 'left' && 'is-left']}
-        data-side={pk.side}
+        class="peak"
         data-peak-elev={pk.elev}
         data-x={pk.x}
         data-y={pk.y}
@@ -563,18 +565,24 @@ const copy = {
     width: 100%;
     height: 100%;
   }
+  /* Deliberately faint. The contours bunch tightest around exactly the summits
+     the labels sit on, so at full strength the type is read against its own
+     densest background. At ~2:1 against the cream the map still reads as a map
+     but recedes behind the names, which is the whole job. */
   .contour {
     fill: none;
-    stroke: #6f6659;
-    stroke-width: 0.9;
+    stroke: #a79c8b;
+    stroke-width: 0.8;
     /* Normalised by pathLength="1", so 1 is undrawn and 0 is complete. */
     stroke-dasharray: 1;
     stroke-dashoffset: 1;
     vector-effect: non-scaling-stroke;
   }
+  /* The coastline is the shape of Galicia, so it stays the strongest line —
+     softened with the rest, but still clearly the outline. */
   .contour.is-coast {
-    stroke: #2e2b27;
-    stroke-width: 1.5;
+    stroke: #4a443c;
+    stroke-width: 1.4;
   }
 
   .intro-top {
@@ -605,31 +613,47 @@ const copy = {
   .intro-meta-row { display: block; }
   .intro-meta-row .dash { color: var(--accent); margin-right: 0.45rem; }
 
-  /* Peaks are positioned in percentages of the chart's own viewBox, so they
-     stay locked to their coordinates however the SVG is scaled. */
+  /* A peak is a zero-size ANCHOR sitting exactly on its projected coordinate.
+     The mark is centred on that point and never moves — it is the whole reason
+     the coordinates were plotted. Only the text is allowed to be pushed around,
+     by layoutPeaks, which is what lets two summits at the same latitude both
+     stay labelled. */
   .intro-peaks { position: absolute; inset: 0; pointer-events: none; }
   .peak {
     position: absolute;
-    display: flex;
-    align-items: flex-start;
-    gap: 0.4rem;
-    transform: translate(-4px, -6px);
+    width: 0;
+    height: 0;
     opacity: 0;
     transition: opacity 0.5s ease;
   }
   .peak[data-reached] { opacity: 1; }
-  .peak-mark { width: 11px; height: 10px; flex: none; }
-  .peak-mark path { fill: none; stroke: #2e2b27; stroke-width: 1.1; }
-  .peak-text { display: block; line-height: 1.35; white-space: nowrap; }
-  /* A close pair would overlap with both labels to the right, so the leftmost
-     puts its text on the other side. The mark itself never moves. */
-  .peak.is-left {
-    flex-direction: row-reverse;
-    transform: translate(calc(-100% + 4px), -6px);
+  .peak-mark {
+    position: absolute;
+    left: -5.5px;   /* half of width  */
+    top: -5px;      /* half of height */
+    width: 11px;
+    height: 10px;
   }
-  .peak.is-left .peak-text { text-align: right; }
+  /* Filled, not hollow: the triangle punches a clean hole in the contours
+     instead of having them run straight through it. */
+  .peak-mark path { fill: #ede6d8; stroke: #2e2b27; stroke-width: 1.1; }
+  .peak-text {
+    position: absolute;
+    left: 0;
+    top: 0;
+    line-height: 1.35;
+    white-space: nowrap;
+    /* A cream halo, the cartographer's trick: the type carries its own
+       background, so it stays legible wherever de-collision puts it rather than
+       depending on how busy the map happens to be underneath. paint-order is
+       SVG-only and these labels are HTML, hence text-shadow. */
+    text-shadow:
+      0 0 3px #ede6d8, 0 0 3px #ede6d8,
+      1px 0 0 #ede6d8, -1px 0 0 #ede6d8,
+      0 1px 0 #ede6d8, 0 -1px 0 #ede6d8;
+  }
   .peak-name { display: block; font-size: 0.72rem; letter-spacing: 0.02em; }
-  .peak-meta { display: block; font-size: 0.62rem; color: #8a8072; }
+  .peak-meta { display: block; font-size: 0.62rem; color: #6f6659; }
 
   .intro-bottom {
     position: absolute;
@@ -1198,29 +1222,107 @@ const copy = {
       const vy = Number(el.dataset.viewY || 0);
       const vw = Number(el.dataset.viewW || 1);
       const vh = Number(el.dataset.viewH || 1);
+      const PAD = 10;    // keep a label this far inside the frame
+      const GAP = 12;    // from the mark's centre to the start of its text
+      const VGAP = 4;    // clear space between two stacked labels
+      const MARK = 8;    // half the triangle's box, as an obstacle to other text
+
+      type Box = { l: number; t: number; r: number; b: number };
+      const hits = (a: Box, c: Box) => a.l < c.r && c.l < a.r && a.t < c.b && c.t < a.b;
+
+      /**
+       * Place every summit's mark on its exact coordinate, then find somewhere
+       * for its text that is inside the frame and clear of every other label AND
+       * every other mark.
+       *
+       * Side-flipping alone cannot do this. On a 390px phone Manzaneda and
+       * Trevinca project 71px apart at the same latitude, and Trevinca's label
+       * needs 375..461 to sit on its right — so no left/right arrangement fits
+       * both, and an earlier version simply drew them on top of one another.
+       *
+       * Nor is text-vs-text enough: with the two labels merely stacked,
+       * "Pena Trevinca" ran straight through Manzaneda's triangle, because a
+       * mark is an obstacle even when no text is there. So each candidate is
+       * tested against the marks too, and the marks never move — they are the
+       * entire point of plotting the coordinates.
+       */
       function layoutPeaks() {
         if (!chartEl) return;
         const r = chartEl.getBoundingClientRect();
         const k = Math.min(r.width / vw, r.height / vh);
         const ox = (r.width - vw * k) / 2;
         const oy = (r.height - vh * k) / 2;
-        for (const pk of peakEls) {
-          const x = ox + (Number(pk.dataset.x || 0) - vx) * k;
-          pk.style.left = `${x}px`;
-          pk.style.top = `${oy + (Number(pk.dataset.y || 0) - vy) * k}px`;
-          // Flip any label that would run off the right edge. On a phone the
-          // eastern summits sit close enough to the frame that the generator's
-          // collision-only side is not enough on its own.
-          // Either reason is enough to flip: the generator's collision check,
-          // or running off the right edge here. Toggling on overflow alone
-          // would undo the collision flip whenever it happens to fit.
-          const w = pk.getBoundingClientRect().width || 170;
-          const overflows = x + w + 12 > r.width;
-          pk.classList.toggle('is-left', pk.dataset.side === 'left' || overflows);
+
+        const items = peakEls.map((pk) => {
+          const px = ox + (Number(pk.dataset.x || 0) - vx) * k;
+          const py = oy + (Number(pk.dataset.y || 0) - vy) * k;
+          pk.style.left = `${px}px`;
+          pk.style.top = `${py}px`;
+          const txt = pk.querySelector<HTMLElement>('.peak-text')!;
+          return {
+            txt, px, py,
+            elev: Number(pk.dataset.peakElev || 0),
+            // offsetWidth/Height are the untransformed layout box, so measuring
+            // is unaffected by the transform written on the previous pass.
+            w: txt.offsetWidth,
+            h: txt.offsetHeight,
+            mark: { l: px - MARK, t: py - MARK, r: px + MARK, b: py + MARK } as Box,
+          };
+        });
+
+        // Every mark is an obstacle to every label but its own.
+        const marks = items.map((i) => i.mark);
+        const taken: Box[] = [];
+
+        // Tallest first, so the headline summit gets the best position and the
+        // lesser ones work around it rather than the other way about.
+        for (const it of [...items].sort((a, b) => b.elev - a.elev)) {
+          const right = it.px + GAP;
+          const left = it.px - GAP - it.w;
+          const mid = it.px - it.w / 2;
+          const above = it.py - it.h - MARK - VGAP;
+          const below = it.py + MARK + VGAP;
+          const centre = it.py - it.h / 2;
+          // Beside the mark reads best, so those come first; above/below are the
+          // fallbacks that give a crowded pair somewhere to go.
+          const candidates: [number, number][] = [
+            [right, centre], [left, centre],
+            [right, above], [left, above],
+            [right, below], [left, below],
+            [mid, above], [mid, below],
+          ];
+
+          let best: Box | null = null;
+          let bestScore = Infinity;
+          for (const [cl, ct] of candidates) {
+            const box: Box = { l: cl, t: ct, r: cl + it.w, b: ct + it.h };
+            // Outside the frame is disqualifying, not merely expensive.
+            if (box.l < PAD || box.t < PAD || box.r > r.width - PAD || box.b > r.height - PAD) continue;
+            let score = 0;
+            for (const m of marks) if (m !== it.mark && hits(box, m)) score += 10;
+            for (const t of taken) if (hits(box, t)) score += 10;
+            if (score < bestScore) { bestScore = score; best = box; }
+            if (score === 0) break;   // first clean candidate wins
+          }
+
+          // Nothing fitted the frame at all: fall back to beside-the-mark,
+          // clamped, so a label is never dropped entirely.
+          if (!best) {
+            const cl = Math.max(PAD, Math.min(right, r.width - PAD - it.w));
+            const ct = Math.max(PAD, Math.min(centre, r.height - PAD - it.h));
+            best = { l: cl, t: ct, r: cl + it.w, b: ct + it.h };
+          }
+
+          taken.push(best);
+          it.txt.style.transform = `translate(${best.l - it.px}px, ${best.t - it.py}px)`;
         }
       }
       layoutPeaks();
       window.addEventListener('resize', layoutPeaks);
+      // Every position here is derived from a measured text width, so a webfont
+      // landing after the first pass would leave the whole layout computed from
+      // fallback metrics.
+      document.fonts?.ready.then(layoutPeaks);
       const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
       // Every tunable lives in src/lib/introConfig.ts and arrives on data
