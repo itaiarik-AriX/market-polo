@@ -548,6 +548,17 @@ const copy = {
   /* ---- intro: the survey chart -----------------------------------------
      Cream, not the site's near-black. It is the fleet section's own ground, and
      it turns the sweep-up exit into a reveal: paper lifting off the footage. */
+  /* A column, so the chart can only ever have the room the chrome leaves it.
+     It used to be `position: absolute; inset: 0`, which resolves against the
+     padding box and so covered the whole viewport regardless of the padding.
+     The viewBox is 545x572 — aspect 0.953 — so `meet` fits by height on
+     anything wider than it is tall, i.e. every desktop: the map came out
+     exactly viewport-height and ran straight through the readout and the
+     progress bar. A phone fits by width instead, which is why only desktop
+     showed it.
+
+     Laid out in flow the overlap cannot happen at any size, and there are no
+     magic offsets to drift out of step when the chrome's type changes size. */
   .intro {
     position: fixed;
     inset: 0;
@@ -556,14 +567,23 @@ const copy = {
     color: #2e2b27;
     padding: clamp(1.5rem, 4vw, 3rem);
     overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    gap: clamp(0.75rem, 2vh, 1.5rem);
   }
   .intro[hidden] { display: none; }
 
   .intro-chart {
-    position: absolute;
-    inset: 0;
-    width: 100%;
-    height: 100%;
+    flex: 1;
+    /* Flex items floor at their content size without this, which would let the
+       chart push the chrome back off the bottom of the screen. */
+    min-height: 0;
+    width: auto;
+    /* Out of the horizontal padding only. A phone already fits by width, so
+       giving the full viewport width back keeps it at exactly the 390x409 it
+       renders today; the column still constrains the height, which is where the
+       problem actually was. */
+    margin-inline: calc(-1 * clamp(1.5rem, 4vw, 3rem));
   }
   /* Deliberately faint. The contours bunch tightest around exactly the summits
      the labels sit on, so at full strength the type is read against its own
@@ -585,11 +605,11 @@ const copy = {
     stroke-width: 1.4;
   }
 
+  /* In flow, not absolute: the inset it used to carry by hand is exactly
+     .intro's padding, so this sits where it always did while now also
+     reserving its height from the chart. */
   .intro-top {
-    position: absolute;
-    top: clamp(1.5rem, 4vw, 3rem);
-    left: clamp(1.5rem, 4vw, 3rem);
-    right: clamp(1.5rem, 4vw, 3rem);
+    flex: none;
     display: flex;
     justify-content: space-between;
     align-items: flex-start;
@@ -656,10 +676,7 @@ const copy = {
   .peak-meta { display: block; font-size: 0.62rem; color: #6f6659; }
 
   .intro-bottom {
-    position: absolute;
-    bottom: clamp(1.5rem, 4vw, 3rem);
-    left: clamp(1.5rem, 4vw, 3rem);
-    right: clamp(1.5rem, 4vw, 3rem);
+    flex: none;
     display: flex;
     align-items: flex-end;
     gap: clamp(1rem, 3vw, 2rem);
@@ -1250,8 +1267,19 @@ const copy = {
         if (!chartEl) return;
         const r = chartEl.getBoundingClientRect();
         const k = Math.min(r.width / vw, r.height / vh);
-        const ox = (r.width - vw * k) / 2;
-        const oy = (r.height - vh * k) / 2;
+        // r.left/r.top, NOT just the letterbox offset. These positions are
+        // written into .intro-peaks, which spans the whole viewport, so they are
+        // viewport coordinates — while ox/oy are only offsets within the chart.
+        // The two were interchangeable for as long as the chart was inset:0 and
+        // started at (0,0); now that it sits inside a column they are not, and
+        // dropping these would slide every summit off its coordinate.
+        const ox = r.left + (r.width - vw * k) / 2;
+        const oy = r.top + (r.height - vh * k) / 2;
+        // Labels are clamped to the VIEWPORT rather than to the chart: one
+        // beside a summit near the chart's edge may legitimately sit outside
+        // the chart box, and there is nothing wrong with it doing so.
+        const frameW = window.innerWidth;
+        const frameH = window.innerHeight;
 
         const items = peakEls.map((pk) => {
           const px = ox + (Number(pk.dataset.x || 0) - vx) * k;
@@ -1297,7 +1325,7 @@ const copy = {
           for (const [cl, ct] of candidates) {
             const box: Box = { l: cl, t: ct, r: cl + it.w, b: ct + it.h };
             // Outside the frame is disqualifying, not merely expensive.
-            if (box.l < PAD || box.t < PAD || box.r > r.width - PAD || box.b > r.height - PAD) continue;
+            if (box.l < PAD || box.t < PAD || box.r > frameW - PAD || box.b > frameH - PAD) continue;
             let score = 0;
             for (const m of marks) if (m !== it.mark && hits(box, m)) score += 10;
             for (const t of taken) if (hits(box, t)) score += 10;
@@ -1308,8 +1336,8 @@ const copy = {
           // Nothing fitted the frame at all: fall back to beside-the-mark,
           // clamped, so a label is never dropped entirely.
           if (!best) {
-            const cl = Math.max(PAD, Math.min(right, r.width - PAD - it.w));
-            const ct = Math.max(PAD, Math.min(centre, r.height - PAD - it.h));
+            const cl = Math.max(PAD, Math.min(right, frameW - PAD - it.w));
+            const ct = Math.max(PAD, Math.min(centre, frameH - PAD - it.h));
             best = { l: cl, t: ct, r: cl + it.w, b: ct + it.h };
           }
 
