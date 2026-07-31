@@ -434,7 +434,7 @@ const copy = {
       <img
         class="hero-brand-mark"
         src="/logo-light.webp"
-        alt="Coruña Campervan"
+        alt="MOUNTAIN-VAN"
         width="578"
         height="534"
         loading="eager"
@@ -477,7 +477,7 @@ const copy = {
   role="presentation"
 >
   <div class="intro-top">
-    <div class="intro-brand serif">Coruña <em>Campervan</em></div>
+    <div class="intro-brand serif">Mountain<em>-Van</em></div>
     <div class="intro-meta">
       <span class="intro-meta-row"><span class="dash">—</span> Campervan hire</span>
       <span class="intro-meta-row"><span class="dash">—</span> A Coruña, Galicia</span>
@@ -1202,6 +1202,33 @@ const copy = {
       return 1;
     }
 
+    /**
+     * Set every copy block's visibility for a given position in the timeline.
+     *
+     * Shared with the language switch, which is why it is a function. Switching
+     * language used to hide the outgoing blocks and stop there, leaving the
+     * incoming ones at whatever opacity they last held — zero, since they had
+     * never been the visible language. The new copy then only appeared once
+     * something else moved the scroll, so on the first station it read as the
+     * text vanishing.
+     */
+    function applyCopy(
+      progress: number,
+      mode: string,
+      rangeById: Record<string, SectionRange>,
+    ) {
+      for (const block of blocks) {
+        if (block.dataset.copyLang !== currentLang || block.dataset.copyMode !== mode) {
+          block.style.opacity = '0';
+          continue;
+        }
+        const r = rangeById[block.dataset.copyId!];
+        const o = r ? opacityForRange(progress, r.start, r.end) : 0;
+        block.style.opacity = String(o);
+        block.style.transform = `translateY(${(1 - o) * 18}px)`;
+      }
+    }
+
     // ---- intro -----------------------------------------------------------
     // The counter is real: it tracks the landing still decoding and the opening
     // scrub frames arriving. It is NOT a fixed animation — on a fast connection
@@ -1460,16 +1487,7 @@ const copy = {
         latestRanges = rangeById;
         updateNav(progress, mode, rangeById);
 
-        for (const block of blocks) {
-          if (block.dataset.copyLang !== currentLang || block.dataset.copyMode !== mode) {
-            block.style.opacity = '0';
-            continue;
-          }
-          const r = rangeById[block.dataset.copyId!];
-          const o = r ? opacityForRange(progress, r.start, r.end) : 0;
-          block.style.opacity = String(o);
-          block.style.transform = `translateY(${(1 - o) * 18}px)`;
-        }
+        applyCopy(progress, mode, rangeById);
 
         // Sharp full-resolution still fades in as the scrub settles on its
         // station, hiding the (softer) scrub frame exactly where the user
@@ -1601,12 +1619,11 @@ const copy = {
     document.addEventListener('language-change', (e: Event) => {
       const { lang } = (e as CustomEvent).detail;
       currentLang = lang;
-      // Re-render copy blocks with the new language by updating visibility
-      for (const block of blocks) {
-        if (block.dataset.copyLang !== currentLang) {
-          block.style.opacity = '0';
-        }
-      }
+      // Re-run the SAME visibility pass the scroll handler uses, at wherever
+      // the visitor currently is. Only hiding the outgoing blocks left the
+      // incoming ones at opacity 0 until the next scroll — which on the first
+      // station looked like the text simply disappearing.
+      applyCopy(scrubber.getProgress(), scrubber.getMode(), latestRanges);
       applyNavLang(currentLang);
     });
 

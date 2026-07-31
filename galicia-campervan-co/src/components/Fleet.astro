@@ -743,7 +743,7 @@ const TILTS = [-1.6, 2.4, -2.8, 1.8, -2.1, 2.9];
         optional: '(optional)',
         placeholder_notes: "Where you're headed, how many of you.",
         subject: 'Booking',
-        greeting: 'Hi Coruña Campervan,',
+        greeting: 'Hi MOUNTAIN-VAN,',
         intro: "We'd like to book",
         dates: 'Dates',
         nameLabel: 'Name',
@@ -762,7 +762,7 @@ const TILTS = [-1.6, 2.4, -2.8, 1.8, -2.1, 2.9];
         optional: '(opcional)',
         placeholder_notes: 'A dónde vais, cuántos sois.',
         subject: 'Reserva',
-        greeting: 'Hola Coruña Campervan:',
+        greeting: 'Hola MOUNTAIN-VAN:',
         intro: 'Nos gustaría reservar',
         dates: 'Fechas',
         nameLabel: 'Nombre',
@@ -782,17 +782,19 @@ const TILTS = [-1.6, 2.4, -2.8, 1.8, -2.1, 2.9];
       (FLEET[lang] ?? FLEET.en).find((v) => v.id === id);
 
     // ---- thumbnails ------------------------------------------------------
-    for (const [l, vans] of Object.entries(FLEET)) {
-      for (const van of vans) {
-        const img = section.querySelector<HTMLImageElement>(`[data-van-thumb="${van.id}"]`);
-        const empty = section.querySelector<HTMLElement>(`[data-van-empty="${van.id}"]`);
-        const list = photosFor(van);
-        if (img && list.length) {
-          img.src = list[0];
-          img.hidden = false;
-          if (empty) empty.hidden = true;
-        }
-        void l;
+    // querySelectorAll, not querySelector: the grid renders one card PER
+    // LANGUAGE, so every van has as many thumbs as there are languages and the
+    // singular form only ever found the English one. The Spanish polaroid was
+    // left on its "photographs coming" frame however many photos existed.
+    for (const van of Object.values(FLEET)[0] ?? []) {
+      const list = photosFor(van);
+      if (!list.length) continue;
+      for (const img of section.querySelectorAll<HTMLImageElement>(`[data-van-thumb="${van.id}"]`)) {
+        img.src = list[0];
+        img.hidden = false;
+      }
+      for (const empty of section.querySelectorAll<HTMLElement>(`[data-van-empty="${van.id}"]`)) {
+        empty.hidden = true;
       }
     }
 
