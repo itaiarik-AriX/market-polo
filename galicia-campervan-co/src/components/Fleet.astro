@@ -543,10 +543,15 @@ const TILTS = [-1.6, 2.4, -2.8, 1.8, -2.1, 2.9];
     font-size: 0.98rem;
   }
 
-  /* Booking is the one loud action here, same treatment it had in Enquire. */
+  /* Booking is the one loud action here, same treatment it had in Enquire.
+     Centred in the column: flex rather than inline-flex, because auto margins
+     do nothing to an inline-level box — it would still sit hard left. */
   .book-cta {
-    display: inline-flex;
+    display: flex;
+    width: fit-content;
+    margin-inline: auto;
     align-items: center;
+    justify-content: center;
     gap: 0.5rem;
     margin-top: 1.6rem;
     background: var(--accent);
@@ -567,7 +572,9 @@ const TILTS = [-1.6, 2.4, -2.8, 1.8, -2.1, 2.9];
     display: flex;
     align-items: center;
     gap: 1rem;
-    margin: 2rem 0 1.4rem;
+    /* Top margin is the gap under the booking button; widened so the primary
+       action is not crowded by the quieter alternative beneath it. */
+    margin: 2.8rem 0 1.4rem;
     color: var(--fg-dim);
     font-size: 0.82rem;
     letter-spacing: 0.04em;

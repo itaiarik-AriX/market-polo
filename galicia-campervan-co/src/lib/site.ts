@@ -4,10 +4,14 @@
 // each admitting they were kept in sync by hand. The fleet overlay would have
 // been a third copy, so it lives here now.
 //
-// Booking happens on a third-party site; this is a placeholder until the real
-// link arrives. Every link built from it opens in a new tab, so it must always
-// be paired with rel="noopener noreferrer".
-export const BOOKING_URL = '#';
+// Booking happens on Yescapa. Every link built from this opens in a new tab, so
+// it must always be paired with rel="noopener noreferrer".
+//
+// One constant covers both call-to-actions AND both languages: the header pill
+// and the van overlay's button each read it, and each already localises its own
+// label (Book/Reservar, Check availability/Ver disponibilidad).
+export const BOOKING_URL = 'https://www.yescapa.es/campers/119790';
 
-// Where the mailto enquiries go.
-export const EMAIL = 'itaiarik@gmail.com';
+// Where the mailto enquiries go — both the hire form in the van overlay and the
+// build form in Enquire.astro. Also the address shown in the page footer.
+export const EMAIL = 'Marketing@mountainvan.es';
