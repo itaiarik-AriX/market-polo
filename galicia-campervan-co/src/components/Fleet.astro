@@ -626,7 +626,9 @@ const TILTS = [-1.6, 2.4, -2.8, 1.8, -2.1, 2.9];
     border-color: var(--accent);
   }
   .submit-btn {
-    align-self: start;
+    /* Centred to sit under the booking button above it. A flex item in a
+       column, so align-self is the whole job — no width or auto margins. */
+    align-self: center;
     background: transparent;
     color: var(--fg);
     border: 1px solid var(--rule-strong);
