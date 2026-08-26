@@ -129,41 +129,36 @@ const copy = {
   en: {
     hire: {
       welcome: {
-        title: 'Take the van. Follow the coast.',
+        title: 'Take the van, follow the coast.',
         body: [
-          'A restored camper, the Atlantic outside, and a few days with nowhere you need to be.',
+          'Find a new adventure, get back to nature, and let the essentials carry you.',
         ],
       },
       exterior: {
-        eyebrow: 'The van',
-        title: 'Built properly. Made to be lived in.',
+        title: 'Made with history. Ready to make yours.',
         body: [
-          'We restored it ourselves, so we know every bolt in it.',
-          "It's the one we'd take ourselves.",
+          'We restored it ourselves, which is why we know every bolt in it.',
+          'We look after every detail, so the only thing you have to think about is enjoying the trip.',
         ],
       },
       amenities: {
-        eyebrow: 'Living in it',
-        title: 'Small outside. Everything you need inside.',
+        title: 'Your shelter. Wherever you go.',
         body: [
-          "The bed pulls out in one movement. There's a hot shower outside, two rings, a sink, and enough space to actually cook.",
-          'Room enough to live in it, not just sleep in it.',
+          'Every corner is built to be warm, useful and welcoming. A full kitchen, a fridge, a television, a proper bed, an outdoor shower, and room enough to enjoy the road as much as the destination.',
         ],
       },
       view: {
-        eyebrow: 'Where you stop',
-        title: 'Stop when you find somewhere worth staying.',
+        title: ['Open the door.', 'Change the view.'],
         body: [
-          'No campsite to plan around. No itinerary to follow.',
-          'Pull off the road, open the door, put the kettle on. The coast is right there.',
+          'Wake up facing the sea, forget the clock, and let the best stories start. Because it is the small moments that change everything.',
         ],
       },
       closing: {
         eyebrow: 'The keys',
-        title: 'You start in A Coruña. You choose where after.',
+        title: ['Start the trip.', 'You decide the rest.'],
         body: [
-          'Take it for a few days, head wherever you like, and bring it back when your trip is done.',
-          'We look after it ourselves, and we answer our own emails. Usually within a day.',
+          'Pick your camper up in A Coruña and start finding new roads, new places and new stories.',
+          'We make sure everything is ready. All you have to choose is which way to go.',
         ],
       },
     },
@@ -212,41 +207,36 @@ const copy = {
   es: {
     hire: {
       welcome: {
-        title: 'Coge la furgo. Sigue la costa.',
+        title: 'Coge la furgo, sigue la costa.',
         body: [
-          'Una camper restaurada, el Atlántico ahí fuera y unos días sin tener que estar en ningún sitio.',
+          'Descubre una nueva aventura, conecta con la naturaleza y déjate llevar por lo esencial.',
         ],
       },
       exterior: {
-        eyebrow: 'La furgo',
-        title: 'Bien hecha. Hecha para vivirla.',
+        title: 'Hecha con historia. Lista para crear la tuya.',
         body: [
-          'La restauramos nosotros, así que conocemos cada tornillo.',
-          'Es la que nos llevaríamos nosotros.',
+          'La restauramos nosotros, por eso conocemos cada tornillo.',
+          'Cuidamos cada detalle para que tú solo tengas que preocuparte de disfrutar la experiencia.',
         ],
       },
       amenities: {
-        eyebrow: 'Vivirla',
-        title: 'Pequeña por fuera. Todo lo necesario dentro.',
+        title: 'Tu refugio. Dondequiera que vayas.',
         body: [
-          'La cama se despliega de un solo movimiento. Hay ducha de agua caliente fuera, dos fuegos, fregadero y sitio de sobra para cocinar de verdad.',
-          'Espacio para vivir dentro, no solo para dormir.',
+          'Cada rincón está diseñado para ser cálido, funcional y acogedor. Cocina equipada, nevera, televisión, una cama confortable, ducha exterior y sitio de sobra para disfrutar tanto del camino como del destino.',
         ],
       },
       view: {
-        eyebrow: 'Dónde parar',
-        title: 'Para cuando encuentres un sitio donde quedarte.',
+        title: ['Abre la puerta.', 'Cambia la perspectiva.'],
         body: [
-          'Sin camping que planear. Sin itinerario que seguir.',
-          'Sal de la carretera, abre la puerta, pon el agua a hervir. La costa está justo ahí.',
+          'Despierta frente al mar, olvídate del reloj y deja que nazcan las mejores historias. Porque son los pequeños momentos los que lo cambian todo.',
         ],
       },
       closing: {
         eyebrow: 'Las llaves',
-        title: 'Empiezas en A Coruña. Tú decides el resto.',
+        title: ['Empieza el viaje.', 'Lo demás lo decides tú.'],
         body: [
-          'Llévatela unos días, ve donde quieras y devuélvela cuando termine el viaje.',
-          'La cuidamos nosotros y contestamos nuestros propios correos. Normalmente en menos de un día.',
+          'Recoge tu camper en A Coruña y empieza a descubrir nuevos caminos, nuevos lugares y nuevas historias.',
+          'Nosotros nos encargamos de que todo esté listo. Tú solo tienes que elegir hacia dónde quieres ir.',
         ],
       },
     },
@@ -372,7 +362,12 @@ const copy = {
           Object.entries(sections).map(([id, block]) => (
             <div class="copy-block" data-copy-lang={lang} data-copy-mode={mode} data-copy-id={id}>
               {block.eyebrow && <p class="eyebrow">{block.eyebrow}</p>}
-              <h2 class="serif copy-title">{block.title}</h2>
+              <h2 class="serif copy-title">
+                {Array.isArray(block.title)
+                  ? block.title.map((line) => <span class="copy-line">{line}</span>)
+                  : block.title}
+              </h2>
+              <span class="copy-rule" aria-hidden="true"></span>
               {block.body.map((para) => <p class="copy-body">{para}</p>)}
             </div>
           ))
@@ -836,7 +831,11 @@ const copy = {
     right: 0;
     bottom: 12vh;
     padding: 0 2rem;
-    max-width: 760px;
+    /* Widened from 760px to match the column in the client's mockups, where the
+       longest headline sits on one line at ~865px. Giving the line room is what
+       reproduces their layout; shrinking the type to fit 760px would have hit
+       the same line count while making the headline smaller than designed. */
+    max-width: 1040px;
     margin: 0 auto;
     text-align: center;
     opacity: 0;
@@ -855,16 +854,28 @@ const copy = {
     color: var(--fg);
     text-shadow: 0 2px 28px rgba(0, 0, 0, 0.6);
   }
-  /* These three headlines are the ones long enough to wrap and orphan a word
-     at normal size — sized down just enough (measured, not eyeballed) to sit
-     on one line at both a phone and a wide desktop, instead of shrinking every
-     headline on the site. */
-  .copy-block[data-copy-mode='hire'][data-copy-id='welcome'] .copy-title {
-    font-size: clamp(1.5rem, 4.6vw, 3.35rem);
+  /* A title given as an array breaks exactly where the mockups break it. Both
+     of those headlines are two sentences and DO fit on one line at this column
+     width, so leaving it to wrapping would have silently joined them. */
+  .copy-line { display: block; }
+
+  /* A short rule between headline and body, as in the client's mockups. Its
+     own element rather than a ::after on the title, so it sits correctly under
+     a headline that wraps to two lines. */
+  .copy-rule {
+    display: block;
+    width: clamp(120px, 18%, 190px);
+    height: 1px;
+    margin: 1.1rem auto 0;
+    background: var(--accent);
+    opacity: 0.85;
   }
-  .copy-block[data-copy-mode='hire'][data-copy-id='exterior'] .copy-title {
-    font-size: clamp(1.3rem, 4.1vw, 2.9rem);
-  }
+
+  /* Build's welcome headline still wraps and orphans a word at full size, so it
+     keeps its measured step-down. The two hire headlines that used to be
+     clamped here are deliberately no longer: the new copy is designed to sit on
+     two lines, so forcing one line would shrink it against the layout it was
+     written for. */
   .copy-block[data-copy-mode='build'][data-copy-id='welcome'] .copy-title {
     font-size: clamp(1.25rem, 3.9vw, 2.7rem);
   }
@@ -1058,7 +1069,11 @@ const copy = {
   }
 
   @media (max-width: 640px) {
-    .copy-block { bottom: 14vh; }
+    /* 16vh, not 14vh: the badge occupies the bottom-right corner up to ~122px
+       from the bottom on a 844px-tall phone, so at 14vh the widest body lines
+       ran into it. Measured before this copy change too, so it is a long-
+       standing overlap rather than something the new text introduced. */
+    .copy-block { bottom: 16vh; }
     /* Smaller on phones so it never crowds the copy */
     .hero-brand {
       height: clamp(66px, 10vh, 104px);
