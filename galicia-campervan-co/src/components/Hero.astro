@@ -1610,6 +1610,10 @@ const copy = {
     document.addEventListener('mode-change', (e: Event) => {
       const { mode } = (e as CustomEvent).detail;
       scrubber.setMode(mode);
+      // Build shows the under-construction page instead of the scrub track.
+      // Safe to hide with the scrubber still wired up: onScroll already guards
+      // scrollableDistance > 0, so a zero-height track just reports progress 0.
+      if (track) track.hidden = mode === 'build';
     });
 
     // The rail is rendered at build time with both languages in data

@@ -176,9 +176,12 @@ import { EMAIL } from '../lib/site';
       });
     }
 
-    // The whole section is Build's now — in Hire the fleet takes its place.
+    // Build's under-construction page (Building.astro) now covers this ground
+    // with its own mailto, so this form is retired for the moment — hidden in
+    // both modes rather than removed, which is one line to restore once Build
+    // ships for real.
     function applyMode(mode) {
-      if (section) section.hidden = mode !== 'build';
+      if (section) section.hidden = true;
       document.querySelectorAll('[data-enquire-panel]').forEach((panel) => {
         panel.hidden = panel.dataset.enquirePanel !== mode;
       });
