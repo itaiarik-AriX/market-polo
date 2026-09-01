@@ -118,9 +118,18 @@ def main():
     src = Image.open(args.src)
     print(f'source {src.size} {src.mode}')
 
-    alpha = background_alpha(src, erode=args.erode)
+    # A real alpha channel (e.g. an already-transparent PNG export) needs none
+    # of the checkerboard reconstruction below - that path is only for a flat
+    # JPEG export with no alpha of its own.
+    src_alpha = src.getchannel('A') if src.mode == 'RGBA' else None
+    has_real_alpha = src_alpha is not None and src_alpha.getextrema() != (255, 255)
+
     rgba = src.convert('RGBA')
-    rgba.putalpha(alpha)
+    if has_real_alpha:
+        rgba.putalpha(src_alpha)
+    else:
+        alpha = background_alpha(src, erode=args.erode)
+        rgba.putalpha(alpha)
 
     box = rgba.getbbox()                      # trims on alpha
     cut = rgba.crop(box)
