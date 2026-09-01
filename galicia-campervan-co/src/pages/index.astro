@@ -6,7 +6,7 @@ import Fleet from '../components/Fleet.astro';
 import Enquire from '../components/Enquire.astro';
 import Building from '../components/Building.astro';
 import Cursor from '../components/Cursor.astro';
-import { EMAIL } from '../lib/site';
+import { EMAIL, INSTAGRAM_URL, TIKTOK_URL } from '../lib/site';
 
 const YEAR = new Date().getFullYear();
 ---
@@ -69,6 +69,21 @@ const YEAR = new Date().getFullYear();
     <Enquire />
   </main>
   <footer>
+    <div class="footer-social">
+      <a href={INSTAGRAM_URL} target="_blank" rel="noopener noreferrer" aria-label="Instagram">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true">
+          <rect x="3" y="3" width="18" height="18" rx="5"/>
+          <circle cx="12" cy="12" r="4.2"/>
+          <circle cx="17.2" cy="6.8" r="1.1" fill="currentColor" stroke="none"/>
+        </svg>
+      </a>
+      <a href={TIKTOK_URL} target="_blank" rel="noopener noreferrer" aria-label="TikTok">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true">
+          <path d="M15 3v10.6a3.6 3.6 0 1 1-3-3.55" stroke-linecap="round"/>
+          <path d="M15 3c0 2.6 2 4.6 4.6 4.6" stroke-linecap="round"/>
+        </svg>
+      </a>
+    </div>
     <div>
       © {YEAR} MOUNTAIN-VAN
       <span class="dot">·</span>
@@ -93,6 +108,20 @@ const YEAR = new Date().getFullYear();
     footer .dot {
       color: var(--rule-strong);
       margin: 0 0.6rem;
+    }
+    .footer-social {
+      display: flex;
+      justify-content: center;
+      gap: 1.1rem;
+      margin-bottom: 1rem;
+    }
+    .footer-social a {
+      display: inline-flex;
+      color: var(--fg-dim);
+      transition: color 0.2s ease;
+    }
+    .footer-social a:hover {
+      color: var(--accent);
     }
   </style>
 </body>

@@ -15,3 +15,8 @@ export const BOOKING_URL = 'https://www.yescapa.es/campers/119790';
 // Where the mailto enquiries go — both the hire form in the van overlay and the
 // build form in Enquire.astro. Also the address shown in the page footer.
 export const EMAIL = 'Marketing@mountainvan.es';
+
+// Social links shown in the footer. Placeholders until the accounts exist —
+// '#' keeps the icons inert (no dead-tab navigation) rather than broken.
+export const INSTAGRAM_URL = '#';
+export const TIKTOK_URL = '#';
