@@ -79,9 +79,12 @@ const YEAR = new Date().getFullYear();
   <meta property="og:locale" content="en_US" />
   <meta name="twitter:title" content="MOUNTAIN-VAN — a restored camper for hire on the Galician coast" />
   <meta name="twitter:description" content="One restored camper, available to hire on the Galician coast. Sleeps two, cooks properly, and goes wherever the road runs out." />
-  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  {/* The real badge, not Astro's starter placeholder. mask-icon (Safari's old
+      single-colour pinned-tab glyph) is dropped rather than reduced from this
+      full-colour artwork - that feature is long gone from current Safari. */}
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
+  <link rel="icon" type="image/x-icon" href="/favicon.ico" />
   <link rel="apple-touch-icon" href="/logo-light.webp" />
-  <link rel="mask-icon" href="/favicon.svg" color="#c9a961" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;1,9..144,400;1,9..144,500&family=Inter:wght@300;400;500&display=swap" rel="stylesheet" />
