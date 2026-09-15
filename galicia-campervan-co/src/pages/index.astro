@@ -20,22 +20,37 @@ const YEAR = new Date().getFullYear();
   <meta name="theme-color" content="#0b0c0d" media="(prefers-color-scheme: dark)" />
   <meta name="theme-color" content="#f5f1e8" media="(prefers-color-scheme: light)" />
   <title>MOUNTAIN-VAN — a restored camper for hire on the Galician coast</title>
+  <link rel="canonical" href="https://www.mountainvan.es/" />
+
+  {/* Static defaults so a crawler that never runs JS (most link-preview
+      fetchers) still gets a correct card. The inline script below keeps these
+      in step with the visitor's language for anyone who does run JS. */}
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://www.mountainvan.es/" />
+  <meta property="og:site_name" content="MOUNTAIN-VAN" />
+  <meta property="og:image" content="https://www.mountainvan.es/fleet/nomad/01-exterior-front.jpg" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:image" content="https://www.mountainvan.es/fleet/nomad/01-exterior-front.jpg" />
+
   <script is:inline>
     // Title and description are language-specific but live in static <head>.
     // Applied before paint so a Spanish visitor never sees the English title
     // flash, and kept in step by the same language-change event everything
-    // else listens to.
+    // else listens to. og:*/twitter:* share the same strings so a link
+    // shared after switching language previews correctly too.
     (function () {
       var STRINGS = {
         en: {
           title: 'MOUNTAIN-VAN — a restored camper for hire on the Galician coast',
           description:
             'One restored camper, available to hire on the Galician coast. Sleeps two, cooks properly, and goes wherever the road runs out.',
+          locale: 'en_US',
         },
         es: {
           title: 'MOUNTAIN-VAN — camper restaurada de alquiler en la costa gallega',
           description:
             'Una camper restaurada, de alquiler en la costa gallega. Duerme a dos, cocina de verdad y llega hasta donde acaba la carretera.',
+          locale: 'es_ES',
         },
       };
       function apply(lang) {
@@ -44,11 +59,26 @@ const YEAR = new Date().getFullYear();
         document.documentElement.lang = lang;
         var meta = document.querySelector('meta[name="description"]');
         if (meta) meta.setAttribute('content', s.description);
+        [
+          ['meta[property="og:title"]', s.title],
+          ['meta[property="og:description"]', s.description],
+          ['meta[property="og:locale"]', s.locale],
+          ['meta[name="twitter:title"]', s.title],
+          ['meta[name="twitter:description"]', s.description],
+        ].forEach(function (pair) {
+          var el = document.querySelector(pair[0]);
+          if (el) el.setAttribute('content', pair[1]);
+        });
       }
       try { apply(localStorage.getItem('lang') || 'en'); } catch (e) {}
       document.addEventListener('language-change', function (e) { apply(e.detail.lang); });
     })();
   </script>
+  <meta property="og:title" content="MOUNTAIN-VAN — a restored camper for hire on the Galician coast" />
+  <meta property="og:description" content="One restored camper, available to hire on the Galician coast. Sleeps two, cooks properly, and goes wherever the road runs out." />
+  <meta property="og:locale" content="en_US" />
+  <meta name="twitter:title" content="MOUNTAIN-VAN — a restored camper for hire on the Galician coast" />
+  <meta name="twitter:description" content="One restored camper, available to hire on the Galician coast. Sleeps two, cooks properly, and goes wherever the road runs out." />
   <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
   <link rel="apple-touch-icon" href="/logo-light.webp" />
   <link rel="mask-icon" href="/favicon.svg" color="#c9a961" />
