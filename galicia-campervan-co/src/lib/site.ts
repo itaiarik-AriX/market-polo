@@ -16,7 +16,9 @@ export const BOOKING_URL = 'https://www.yescapa.es/campers/119790';
 // build form in Enquire.astro. Also the address shown in the page footer.
 export const EMAIL = 'Marketing@mountainvan.es';
 
-// Social links shown in the footer. Placeholders until the accounts exist —
-// '#' keeps the icons inert (no dead-tab navigation) rather than broken.
-export const INSTAGRAM_URL = '#';
-export const TIKTOK_URL = '#';
+// Social links shown in the footer. Trimmed to the plain profile URL - the
+// share links they were sent as carry app tracking params (stkn, utm_source,
+// _r, _t) that aren't needed to reach the profile and aren't guaranteed to
+// stay valid.
+export const INSTAGRAM_URL = 'https://www.instagram.com/mountainvan_garage/';
+export const TIKTOK_URL = 'https://www.tiktok.com/@mountainvan';
